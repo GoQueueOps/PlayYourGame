@@ -1,38 +1,48 @@
-.App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+/* --- Global Theme & Reset --- */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #020617; /* Your deep obsidian background */
   color: white;
+  font-family: 'Inter', -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-.App-link {
-  color: #61dafb;
+.App {
+  text-align: left; /* Changed from center to suit profile layouts */
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* --- Aura Bar Animation [cite: 2026-02-12] --- */
+@keyframes aura-fill {
+  from { width: 0%; }
+  to { width: var(--aura-width); }
+}
+
+.aura-bar-fill {
+  /* Controls the smooth sliding effect of the Aura percentage [cite: 2026-02-12] */
+  animation: aura-fill 1.5s ease-out forwards;
+}
+
+/* --- Mobile Utility Classes [cite: 2026-02-08] --- */
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Hides scrollbar on Android/iOS for cleaner look */
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* --- Interaction Feedback [cite: 2026-02-08] --- */
+button:active {
+  transform: scale(0.96); /* Provides physical "click" feel on touchscreens */
+  transition: transform 0.1s ease;
+}
+
+/* --- Gradient Text for Branding --- */
+.text-aura-gradient {
+  background: linear-gradient(to r, #ea580c, #facc15);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
