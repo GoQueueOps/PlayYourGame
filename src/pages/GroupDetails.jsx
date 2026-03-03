@@ -21,6 +21,12 @@ function GroupDetails() {
     { id: 4, name: "Geluuu", role: "Member", aura: 1200, status: "Offline", isFriend: true },
   ];
 
+  // ✅ Updated navigation to go to standard-profile
+  const handleProfileClick = (member) => {
+    // You can pass the member data via state if your profile page needs it
+    navigate(`/standard-profile`, { state: { memberId: member.id } });
+  };
+
   return (
     <div className="min-h-screen bg-[#020617] text-white font-sans italic pb-32">
       
@@ -37,15 +43,15 @@ function GroupDetails() {
 
       {/* --- GROUP HERO --- */}
       <div className="p-8 text-center bg-gradient-to-b from-[#0b0f1a] to-transparent">
-        <div className="w-24 h-24 bg-slate-800 rounded-[2.5rem] mx-auto mb-6 border-2 border-emerald-500/20 overflow-hidden">
+        <div className="w-24 h-24 bg-slate-800 rounded-[2.5rem] mx-auto mb-6 border-2 border-emerald-500/20 overflow-hidden shadow-2xl">
           <img 
             src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=200" 
-            className="w-full h-full object-cover grayscale" 
+            className="w-full h-full object-cover grayscale brightness-75 hover:grayscale-0 transition-all duration-500" 
             alt="Group" 
           />
         </div>
-        <h2 className="text-3xl font-black uppercase tracking-tighter italic mb-2">CDA Sector-9 Strikers</h2>
-        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-8 italic px-10 leading-relaxed">
+        <h2 className="text-3xl font-black uppercase tracking-tighter italic mb-2 text-white">CDA Sector-9 Strikers</h2>
+        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-8 italic px-10 leading-relaxed max-w-lg mx-auto">
           "The most aggressive football squad in Sector 9. Daily drills and weekend challenges."
         </p>
       </div>
@@ -60,19 +66,27 @@ function GroupDetails() {
         {members.map((member) => (
           <motion.div 
             key={member.id}
-            className="bg-[#0b0f1a] border border-white/5 p-5 rounded-[2rem] flex items-center justify-between active:bg-white/[0.04] transition-all"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-[#0b0f1a] border border-white/5 p-5 rounded-[2rem] flex items-center justify-between transition-all"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center font-black text-slate-600 italic border border-white/10 relative">
+            {/* ✅ CLICKABLE AREA: Avatar + Name */}
+            <div 
+              onClick={() => handleProfileClick(member)}
+              className="flex items-center gap-4 cursor-pointer group flex-1"
+            >
+              <div className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center font-black text-slate-600 italic border border-white/10 relative group-hover:border-emerald-500/50 transition-all">
                 {member.name[0]}
                 {member.role === "Creator" && (
-                  <div className="absolute -top-1 -right-1 bg-yellow-500 p-1.5 rounded-full ring-2 ring-[#0b0f1a]">
+                  <div className="absolute -top-1 -right-1 bg-yellow-500 p-1.5 rounded-full ring-2 ring-[#0b0f1a] shadow-lg">
                     <Crown size={8} className="text-black" />
                   </div>
                 )}
               </div>
               <div>
-                <h4 className="text-sm font-black uppercase italic tracking-tight">{member.name}</h4>
+                <h4 className="text-sm font-black uppercase italic tracking-tight group-hover:text-emerald-500 transition-colors duration-300">
+                  {member.name}
+                </h4>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`text-[8px] font-black uppercase tracking-widest ${member.status === 'In Match' ? 'text-orange-500' : 'text-slate-600'}`}>
                     • {member.status}
@@ -83,17 +97,17 @@ function GroupDetails() {
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button className="p-4 bg-white/5 rounded-2xl text-slate-500 hover:text-white transition-all active:scale-90">
+            {/* ACTION BUTTONS (Kept separate from profile click) */}
+            <div className="flex gap-2 ml-4">
+              <button className="p-4 bg-white/5 rounded-2xl text-slate-500 hover:text-white transition-all active:scale-90 border border-transparent hover:border-white/10">
                 <MessageSquare size={16} />
               </button>
               
-              {/* UPDATED BUTTON: Send Friend Request instead of Thunder */}
               <button 
                 className={`p-4 rounded-2xl border transition-all active:scale-90 ${
                   member.isFriend 
                   ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" 
-                  : "bg-white/5 border-white/5 text-slate-400"
+                  : "bg-white/5 border-white/5 text-slate-400 hover:text-white"
                 }`}
               >
                 {member.isFriend ? <Check size={16} /> : <UserPlus size={16} />}
@@ -102,7 +116,6 @@ function GroupDetails() {
           </motion.div>
         ))}
       </div>
-
     </div>
   );
 }

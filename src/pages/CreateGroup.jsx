@@ -35,7 +35,7 @@ function CreateGroup() {
         </button>
         <div>
           <h1 className="text-xl font-black uppercase italic tracking-tighter leading-none">
-            Start a <span className="text-emerald-500">Lobby</span>
+            Start a <span className="text-emerald-500">Group</span>
           </h1>
           <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1 italic italic">Establish your local Crew</p>
         </div>
@@ -54,7 +54,7 @@ function CreateGroup() {
         {/* --- CORE INFO --- */}
         <div className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-4 italic">Lobby Name</label>
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-4 italic">Group Name</label>
             <input 
               type="text" 
               placeholder="E.G. CDA SECTOR-9 GIANTS"
@@ -127,7 +127,7 @@ function CreateGroup() {
 
         {/* --- SUBMIT --- */}
         <button className="w-full py-6 bg-white text-black rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3">
-          DEPLOY LOBBY <Zap size={16} fill="currentColor" />
+          DEPLOY GROUP <Zap size={16} fill="currentColor" />
         </button>
 
       </div>

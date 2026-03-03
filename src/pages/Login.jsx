@@ -14,12 +14,12 @@ function Login() {
   // Mock function to simulate checking if email exists
   const checkEmail = () => {
     if (!email) return;
-    // For now, let's pretend emails ending in '@test.com' already exist
+    // Simulate check: emails ending in '@test.com' already exist
     setEmailExists(email.endsWith("@test.com"));
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white flex flex-col items-center justify-center font-sans p-6">
+    <div className="min-h-screen bg-[#020617] text-white flex flex-col items-center justify-center font-sans p-6 italic">
       <div className="w-full max-w-[400px] space-y-10">
         
         {/* ⚡ BRANDING */}
@@ -46,7 +46,7 @@ function Login() {
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4 mb-2 block">Mobile Number</label>
                     <div className="flex gap-2">
                       <div className="bg-white/5 border border-white/10 rounded-2xl px-4 flex items-center font-bold">+91</div>
-                      <input type="tel" placeholder="00000 00000" className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold placeholder:text-gray-800" />
+                      <input type="tel" placeholder="00000 00000" className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold placeholder:text-gray-800 text-white" />
                     </div>
                   </div>
                   <button onClick={() => setOtpSent(true)} className="w-full bg-green-500 text-black py-5 rounded-2xl font-black uppercase italic tracking-tighter shadow-xl shadow-green-500/20 active:scale-95 transition-all">
@@ -57,12 +57,12 @@ function Login() {
                 <>
                   <div>
                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4 mb-2 block">Enter OTP</label>
-                    <input type="text" maxLength="6" placeholder="• • • • • •" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 text-center text-2xl tracking-[0.5em] font-black placeholder:text-gray-800" />
+                    <input type="text" maxLength="6" placeholder="• • • • • •" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 text-center text-2xl tracking-[0.5em] font-black placeholder:text-gray-800 text-white" />
                   </div>
                   <button onClick={() => navigate("/")} className="w-full bg-green-500 text-black py-5 rounded-2xl font-black uppercase italic tracking-tighter active:scale-95 transition-all">
                     Verify & Login
                   </button>
-                  <button onClick={() => setOtpSent(false)} className="w-full text-[10px] font-black text-gray-500 uppercase tracking-widest">Resend or Change Number</button>
+                  <button onClick={() => setOtpSent(false)} className="w-full text-[10px] font-black text-gray-500 uppercase tracking-widest mt-2">Resend or Change Number</button>
                 </>
               )}
             </motion.div>
@@ -80,25 +80,27 @@ function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   onBlur={checkEmail}
                   placeholder="name@example.com" 
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold placeholder:text-gray-800" 
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold placeholder:text-gray-800 text-white" 
                 />
               </div>
 
+              {/* USE emailExists TO SHOW PASSWORD FIELD */}
               {emailExists === true && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4 mb-2 block">Password</label>
-                  <input type="password" placeholder="••••••••" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold" />
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-4">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4 block">Password</label>
+                  <input type="password" placeholder="••••••••" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold text-white" />
                 </motion.div>
               )}
 
+              {/* USE emailExists TO SHOW SIGNUP FIELDS */}
               {emailExists === false && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-                  <input type="text" placeholder="Full Name" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold" />
-                  <input type="password" placeholder="Create Password" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold" />
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-4">
+                  <input type="text" placeholder="Full Name" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold text-white" />
+                  <input type="password" placeholder="Create Password" className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-green-500 font-bold text-white" />
                 </motion.div>
               )}
 
-              <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase italic tracking-tighter active:scale-95 transition-all">
+              <button className={`w-full ${emailExists === false ? "bg-blue-600" : "bg-green-500"} text-black py-5 rounded-2xl font-black uppercase italic tracking-tighter active:scale-95 transition-all`}>
                 {emailExists === false ? "Create Account" : "Continue"}
               </button>
             </motion.div>
@@ -122,6 +124,7 @@ function Login() {
               onClick={() => {
                 setLoginMethod(loginMethod === "phone" ? "email" : "phone");
                 setOtpSent(false);
+                setEmailExists(null);
               }}
               className="bg-white/5 border border-white/10 py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
@@ -138,8 +141,8 @@ function Login() {
           <div className="bg-white/5 border border-white/5 p-5 rounded-[2.5rem] flex flex-col gap-3">
             <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest text-center">Business Portal</p>
             <div className="flex gap-3">
-              <button onClick={() => navigate("/owner-login")} className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl text-[9px] font-black uppercase text-blue-400">Owner</button>
-              <button onClick={() => navigate("/admin-login")} className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl text-[9px] font-black uppercase text-purple-400">Admin</button>
+              <button onClick={() => navigate("/owner-login")} className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl text-[9px] font-black uppercase text-blue-400 hover:bg-blue-400/10">Owner</button>
+              <button onClick={() => navigate("/admin-login")} className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl text-[9px] font-black uppercase text-purple-400 hover:bg-purple-400/10">Admin</button>
             </div>
           </div>
         </div>

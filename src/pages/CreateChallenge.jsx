@@ -1,118 +1,224 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  X, Zap, MapPin, Calendar, 
-   ChevronRight, Swords 
+import {
+  X,
+  Zap,
+  MapPin,
+  Calendar,
+  Edit3
 } from "lucide-react";
 
 function CreateChallenge({ isOpen, onClose }) {
-  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     sport: "Football",
+    mode: "Solo",
+    teamSize: 3,
+    type: "Friendly",
     stakes: 20,
     venue: "",
-    type: "Competitive"
+    date: ""
   });
 
   if (!isOpen) return null;
 
+  const winnerAmount = formData.stakes * 2;
+
+  // Handles manual point entry
+  const handleCustomStakes = (value) => {
+    const numValue = parseInt(value) || 0;
+    setFormData({ ...formData, stakes: numValue });
+  };
+
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center p-0 sm:p-6 italic font-sans">
-        {/* Backdrop */}
-        <motion.div 
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
           onClick={onClose}
-          className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
         />
 
-        {/* Form Card */}
-        <motion.div 
-          initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          className="relative w-full max-w-xl bg-[#0b0f1a] border-t sm:border border-white/10 rounded-t-[3rem] sm:rounded-[3rem] overflow-hidden shadow-2xl"
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          className="relative w-full max-w-xl bg-[#0b0f1a] border border-white/10 rounded-[2.5rem] p-8 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh] no-scrollbar italic font-black"
         >
-          {/* Header */}
-          <div className="p-8 border-b border-white/5 flex justify-between items-center bg-[#0f172a]">
-            <div>
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter">Draft <span className="text-emerald-500">Duel</span></h2>
-              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Step {step} of 3 • Rules of Engagement</p>
-            </div>
-            <button onClick={onClose} className="p-3 bg-white/5 rounded-2xl text-slate-400 hover:text-white transition-colors">
+          {/* HEADER */}
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl uppercase tracking-tighter italic">
+              Launch <span className="text-emerald-500">Challenge</span>
+            </h2>
+            <button 
+              onClick={onClose}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            >
               <X size={20} />
             </button>
           </div>
 
-          <div className="p-8 space-y-8">
-            {/* STEP 1: SPORT & TYPE */}
-            {step === 1 && (
-              <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  {['Football', 'Cricket', 'Badminton', 'Pickleball'].map((s) => (
-                    <button 
-                      key={s} onClick={() => setFormData({...formData, sport: s})}
-                      className={`py-6 rounded-2xl border font-black uppercase text-[10px] tracking-widest transition-all ${formData.sport === s ? 'bg-white text-black border-white' : 'bg-white/5 border-white/5 text-slate-500'}`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5">
-                  <button onClick={() => setFormData({...formData, type: "Friendly"})} className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest ${formData.type === 'Friendly' ? 'bg-blue-500 text-white' : 'text-slate-600'}`}>Friendly</button>
-                  <button onClick={() => setFormData({...formData, type: "Competitive"})} className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest ${formData.type === 'Competitive' ? 'bg-orange-600 text-white' : 'text-slate-600'}`}>Competitive</button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* STEP 2: STAKES (Z-POINTS) */}
-            {step === 2 && (
-              <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="space-y-6 text-center">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Select Stake Amount</p>
-                <div className="flex justify-center gap-4">
-                  {[20, 30, 50, 100].map((pts) => (
-                    <button 
-                      key={pts} onClick={() => setFormData({...formData, stakes: pts})}
-                      className={`w-16 h-16 rounded-full border-2 flex flex-col items-center justify-center transition-all ${formData.stakes === pts ? 'bg-yellow-500 border-yellow-400 text-black shadow-[0_0_20px_rgba(234,179,8,0.4)]' : 'bg-white/5 border-white/10 text-slate-500'}`}
-                    >
-                      <Zap size={14} fill={formData.stakes === pts ? "black" : "none"} />
-                      <span className="text-[10px] font-black mt-1">{pts}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[9px] font-black text-orange-500 uppercase tracking-tighter">Winner takes: {(formData.stakes * 2) * 0.9} Z-PTS (10% Arena Tax)</p>
-              </motion.div>
-            )}
-
-            {/* STEP 3: VENUE & TIME */}
-            {step === 3 && (
-              <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="space-y-4">
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4">
-                  <MapPin className="text-emerald-500" size={20} />
-                  <input className="bg-transparent outline-none flex-1 text-[11px] font-black uppercase tracking-widest" placeholder="VENUE NAME (e.g. KRATER'S)" />
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4">
-                  <Calendar className="text-emerald-500" size={20} />
-                  <input type="datetime-local" className="bg-transparent outline-none flex-1 text-[11px] font-black uppercase tracking-widest text-slate-400" />
-                </div>
-              </motion.div>
-            )}
-
-            {/* Navigation Buttons */}
-            <div className="flex gap-4 pt-4">
-              {step > 1 && (
-                <button onClick={() => setStep(step - 1)} className="p-5 bg-white/5 text-white rounded-2xl border border-white/10 active:scale-90 transition-all">
-                  <ChevronRight size={20} className="rotate-180" />
-                </button>
-              )}
-              <button 
-                onClick={() => step < 3 ? setStep(step + 1) : onClose()} 
-                className="flex-1 bg-emerald-500 text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+          {/* SPORT SELECTION */}
+          <div className="grid grid-cols-2 gap-3">
+            {["Football", "Cricket", "Badminton", "Pickleball"].map((s) => (
+              <button
+                key={s}
+                onClick={() => setFormData({ ...formData, sport: s })}
+                className={`py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                  formData.sport === s
+                    ? "bg-white text-black shadow-lg"
+                    : "bg-white/5 text-slate-500 border border-white/5 hover:border-white/20"
+                }`}
               >
-                {step === 3 ? "Launch Challenge" : "Next Phase"} 
-                {step === 3 ? <Swords size={16} /> : <ChevronRight size={16} />}
+                {s}
               </button>
+            ))}
+          </div>
+
+          {/* SOLO / GROUP TOGGLE */}
+          <div className="flex gap-3">
+            {["Solo", "Group"].map((m) => (
+              <button
+                key={m}
+                onClick={() => setFormData({ ...formData, mode: m })}
+                className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                  formData.mode === m
+                    ? "bg-emerald-500 text-black shadow-emerald-500/20 shadow-lg"
+                    : "bg-white/5 text-slate-500 border border-white/5"
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+
+          {/* TEAM SIZE (GROUP ONLY) */}
+          {formData.mode === "Group" && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}>
+              <p className="text-[9px] text-slate-500 mb-3 uppercase tracking-[0.2em]">
+                Squad Configuration
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[3, 4, 5, 6, 7].map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => setFormData({ ...formData, teamSize: size })}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
+                      formData.teamSize === size
+                        ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+                        : "bg-white/5 text-slate-500 border border-white/5"
+                    }`}
+                  >
+                    {size}v{size}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* MATCH TYPE */}
+          <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5">
+            {["Friendly", "Competitive"].map((type) => (
+              <button
+                key={type}
+                onClick={() => setFormData({ ...formData, type })}
+                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  formData.type === type
+                    ? "bg-orange-600 text-white shadow-lg"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+
+          {/* STAKES (COMPETITIVE ONLY) */}
+          {formData.type === "Competitive" && (
+            <motion.div 
+                initial={{ opacity: 0, y: 10 }} 
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-black/20 p-6 rounded-3xl border border-yellow-500/10 space-y-4"
+            >
+              <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">
+                Stakes (Z-Points)
+              </p>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+                {[20, 30, 40, 50].map((pts) => (
+                  <button
+                    key={pts}
+                    onClick={() => setFormData({ ...formData, stakes: pts })}
+                    className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
+                      formData.stakes === pts
+                        ? "bg-yellow-500 text-black border-yellow-400 scale-105 shadow-xl"
+                        : "bg-white/5 text-slate-500 border-white/5 opacity-50"
+                    }`}
+                  >
+                    <Zap size={12} fill={formData.stakes === pts ? "black" : "none"} />
+                    <span className="text-xs">{pts}</span>
+                  </button>
+                ))}
+                
+                {/* CUSTOM POINT FIELD */}
+                <div className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${
+                    ![20,30,40,50].includes(formData.stakes) 
+                    ? "bg-yellow-500/10 border-yellow-500" 
+                    : "bg-white/5 border-white/5"
+                }`}>
+                    <Edit3 size={14} className="text-yellow-500 mr-2 shrink-0" />
+                    <input 
+                        type="number"
+                        placeholder="Custom"
+                        className="bg-transparent w-full outline-none text-xs font-black text-white placeholder:text-slate-600"
+                        value={![20,30,40,50].includes(formData.stakes) ? formData.stakes : ""}
+                        onChange={(e) => handleCustomStakes(e.target.value)}
+                    />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <span className="text-[9px] text-slate-500 uppercase italic">Pot Pool</span>
+                <p className="text-yellow-400 text-sm font-black italic tracking-tighter">
+                  Winner Takes: {winnerAmount} Z-PTS
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* VENUE & DATE */}
+          <div className="space-y-3 font-sans non-italic font-medium">
+            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
+              <MapPin size={18} className="text-emerald-500" />
+              <input
+                placeholder="Select Venue"
+                className="bg-transparent outline-none flex-1 text-sm text-white font-bold"
+                value={formData.venue}
+                onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
+              />
+            </div>
+
+            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
+              <Calendar size={18} className="text-emerald-500" />
+              <input
+                type="datetime-local"
+                className="bg-transparent outline-none flex-1 text-sm text-white font-bold [color-scheme:dark]"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              />
             </div>
           </div>
+
+          {/* LAUNCH BUTTON */}
+          <button
+            onClick={() => {
+              console.log("Challenge Deployed:", formData);
+              onClose();
+            }}
+            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            Deploy Challenge
+          </button>
         </motion.div>
       </div>
     </AnimatePresence>

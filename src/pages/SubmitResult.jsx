@@ -6,41 +6,44 @@ import {
   AlertTriangle, 
   ChevronLeft, 
   ShieldCheck,
-  Zap
+  Zap,
+  Users,
+  User
 } from "lucide-react";
 
 function SubmitResult() {
   const navigate = useNavigate();
-  const [selection, setSelection] = useState(null); // 'win' or 'loss'
+  const [selection, setSelection] = useState(null); 
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Mock data for the current match context
+  // Mock data - In a real app, 'mode' would come from your Match Database
   const matchData = {
     opponent: "Cantonment Kings",
     venue: "Krater's Arena",
-    slab: 50,
-    pool: 90 // 100 total - 10% platform cut
+    pool: 90,
+    mode: "Solo" // Toggle this between "Solo" and "Group" to test
   };
 
+  const isSolo = matchData.mode === "Solo";
+
   const handleSubmit = () => {
-    // Logic: If Captain A says 'win' and Captain B says 'loss' -> Success.
-    // If both say 'win' -> Dispute triggered.
     setIsSubmitted(true);
   };
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6 border border-emerald-500/50">
+      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-6 text-center italic">
+        <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6 border border-emerald-500/50 animate-pulse">
           <ShieldCheck className="text-emerald-500" size={40} />
         </div>
         <h2 className="text-3xl font-black uppercase italic tracking-tighter mb-2">Result Logged</h2>
-        <p className="text-slate-400 text-sm font-bold uppercase tracking-widest max-w-xs">
-          Waiting for {matchData.opponent} to confirm. Z-Points will be distributed shortly.
+        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] max-w-xs leading-relaxed">
+          Waiting for {matchData.opponent} to confirm. <br/> 
+          {isSolo ? "Your" : "Our"} Z-Points will be distributed shortly.
         </p>
         <button 
           onClick={() => navigate("/challenge")}
-          className="mt-10 text-emerald-500 font-black uppercase text-[10px] tracking-[0.4em] border-b border-emerald-500/30 pb-1"
+          className="mt-10 text-emerald-500 font-black uppercase text-[10px] tracking-[0.4em] border-b border-emerald-500/30 pb-1 hover:text-white hover:border-white transition-all"
         >
           Back to League »
         </button>
@@ -49,16 +52,21 @@ function SubmitResult() {
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white font-sans p-6 relative overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-[#020617] text-white font-sans p-6 relative overflow-hidden flex flex-col italic">
       
       {/* HEADER */}
-      <header className="flex items-center gap-6 mb-12">
-        <button onClick={() => navigate(-1)} className="p-3 bg-white/5 border border-white/10 rounded-2xl">
+      <header className="flex items-center gap-6 mb-12 relative z-10">
+        <button onClick={() => navigate(-1)} className="p-3 bg-white/5 border border-white/10 rounded-2xl active:scale-90 transition-all">
           <ChevronLeft size={24} />
         </button>
         <div>
           <h1 className="text-2xl font-black uppercase italic tracking-tighter">Declare Result</h1>
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-1">Match vs {matchData.opponent}</p>
+          <div className="flex items-center gap-2 mt-1">
+            {isSolo ? <User size={12} className="text-slate-500" /> : <Users size={12} className="text-slate-500" />}
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">
+                {matchData.mode} Match vs {matchData.opponent}
+            </p>
+          </div>
         </div>
       </header>
 
@@ -70,47 +78,57 @@ function SubmitResult() {
           <Zap size={32} className="text-yellow-500" fill="currentColor" />
           {matchData.pool} Z-PTS
         </div>
-        <p className="text-[9px] font-black text-emerald-500/50 uppercase mt-2 tracking-widest italic">Winner Takes All (Net Pool)</p>
+        <p className="text-[9px] font-black text-emerald-500/50 uppercase mt-2 tracking-widest italic leading-none">Winner Takes All</p>
       </div>
 
       {/* SELECTION AREA */}
-      <div className="flex-1 space-y-4">
+      <div className="flex-1 space-y-4 relative z-10">
+        {/* WIN BUTTON */}
         <button 
           onClick={() => setSelection("win")}
-          className={`w-full p-8 rounded-[2rem] border-2 transition-all flex items-center justify-between group ${
-            selection === "win" ? "bg-emerald-500 border-emerald-400 text-black" : "bg-white/5 border-white/5 text-white hover:border-white/20"
+          className={`w-full p-8 rounded-[2.5rem] border-2 transition-all flex items-center justify-between group ${
+            selection === "win" ? "bg-emerald-500 border-emerald-400 text-black shadow-[0_20px_40px_rgba(16,185,129,0.2)] scale-[1.02]" : "bg-white/5 border-white/5 text-white hover:border-white/20"
           }`}
         >
           <div className="flex items-center gap-6">
             <Trophy size={32} className={selection === "win" ? "text-black" : "text-emerald-500"} />
             <div className="text-left">
-              <p className="text-xl font-black uppercase italic tracking-tight leading-none">We Won</p>
-              <p className={`text-[10px] font-bold uppercase mt-1 ${selection === "win" ? "text-black/60" : "text-slate-500"}`}>Claim the Z-Point Pool</p>
+              <p className="text-2xl font-black uppercase italic tracking-tight leading-none">
+                {isSolo ? "I Won" : "We Won"}
+              </p>
+              <p className={`text-[10px] font-bold uppercase mt-1 ${selection === "win" ? "text-black/60" : "text-slate-500"}`}>
+                Claim the Z-Point Pool
+              </p>
             </div>
           </div>
         </button>
 
+        {/* LOSS BUTTON */}
         <button 
           onClick={() => setSelection("loss")}
-          className={`w-full p-8 rounded-[2rem] border-2 transition-all flex items-center justify-between group ${
-            selection === "loss" ? "bg-red-500 border-red-400 text-black" : "bg-white/5 border-white/5 text-white hover:border-white/20"
+          className={`w-full p-8 rounded-[2.5rem] border-2 transition-all flex items-center justify-between group ${
+            selection === "loss" ? "bg-red-500 border-red-400 text-black shadow-[0_20px_40px_rgba(239,68,68,0.2)] scale-[1.02]" : "bg-white/5 border-white/5 text-white hover:border-white/20"
           }`}
         >
           <div className="flex items-center gap-6">
             <Frown size={32} className={selection === "loss" ? "text-black" : "text-red-500"} />
             <div className="text-left">
-              <p className="text-xl font-black uppercase italic tracking-tight leading-none">We Lost</p>
-              <p className={`text-[10px] font-bold uppercase mt-1 ${selection === "loss" ? "text-black/60" : "text-slate-500"}`}>Accept Defeat Gracefully</p>
+              <p className="text-2xl font-black uppercase italic tracking-tight leading-none">
+                {isSolo ? "I Lost" : "We Lost"}
+              </p>
+              <p className={`text-[10px] font-bold uppercase mt-1 ${selection === "loss" ? "text-black/60" : "text-slate-500"}`}>
+                Accept Defeat Gracefully
+              </p>
             </div>
           </div>
         </button>
       </div>
 
-      {/* DISPUTE WARNING (Rule 12) */}
-      <div className="mt-10 p-6 bg-yellow-500/5 border border-yellow-500/20 rounded-3xl flex gap-4">
+      {/* DISPUTE WARNING */}
+      <div className="mt-10 p-6 bg-yellow-500/5 border border-yellow-500/20 rounded-[2rem] flex gap-4 backdrop-blur-md">
         <AlertTriangle className="text-yellow-500 flex-shrink-0" size={20} />
-        <p className="text-[9px] font-bold text-yellow-500/80 uppercase leading-relaxed tracking-wider">
-          Warning: False result declaration leads to a <strong>Z-Point burn</strong> and a permanent rank penalty for your team.
+        <p className="text-[9px] font-black text-yellow-500/80 uppercase leading-relaxed tracking-wider">
+          Warning: False result declaration leads to a <strong>Z-Point burn</strong> and a permanent rank penalty for {isSolo ? "your profile" : "your team"}.
         </p>
       </div>
 
@@ -118,15 +136,17 @@ function SubmitResult() {
       <button 
         disabled={!selection}
         onClick={handleSubmit}
-        className={`w-full py-6 rounded-3xl font-black uppercase text-xs tracking-[0.3em] mt-8 transition-all shadow-2xl ${
+        className={`w-full py-6 rounded-[2rem] font-black uppercase text-[11px] tracking-[0.4em] mt-8 transition-all shadow-2xl ${
           selection 
-          ? "bg-white text-black shadow-white/10 hover:scale-[1.02] active:scale-95" 
+          ? "bg-white text-black shadow-white/10 active:scale-95" 
           : "bg-white/5 text-slate-700 cursor-not-allowed"
         }`}
       >
         Confirm Declaration »
       </button>
 
+      {/* BG EFFECT */}
+      <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-emerald-500/5 blur-[100px] rounded-full pointer-events-none" />
     </div>
   );
 }

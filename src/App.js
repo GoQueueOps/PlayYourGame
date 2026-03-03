@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import ScrollToTop from "./components/ScrollToTop";
 
 // PAGES
 import Home from "./pages/Home";
@@ -22,8 +23,8 @@ import FindPlayers from "./pages/FindPlayers";
 import ChallengeMode from "./pages/ChallengeMode";
 import SubmitResult from "./pages/SubmitResult";
 import VenueManager from "./pages/VenueManager";
-import UserProfile  from "./pages/UserProfile";
-import Wallet  from "./pages/Wallet";
+import UserProfile from "./pages/UserProfile";
+import Wallet from "./pages/Wallet";
 import CommunityGroups from "./pages/CommunityGroups";
 import Tournaments from "./pages/Tournaments";
 import MatchReview from "./pages/MatchReview";
@@ -39,31 +40,40 @@ import GroupDetails from "./pages/GroupDetails";
 import CreateGroup from "./pages/CreateGroup";
 import GroupManagement from "./pages/GroupManagement";
 import SearchPlayer from "./pages/SearchPlayers";
+import OwnerLogin from "./pages/OwnerLogin";
+import AdminLogin from "./pages/AdminLogin";
+import CreateAppealModal from "./components/CreateAppealModal";
+import ArenaLegends from "./pages/ArenaLegends";
+import StandardProfile from "./pages/StandardProfile";
+import Inbox from "./pages/Inbox";
+import UniversalChat from "./pages/UniversalChat";
 
 
 function LayoutContent() {
   const location = useLocation();
 
-  // Paths where main Navbar/Footer are hidden
   const hideLayoutPaths = [
     "/login", "/owner", "/settings", "/confirm", "/success",
     "/superadmin-portal", "/booking", "/find-players", "/challenge", 
-    "/wallet", "/manager" , "/match-review", "/admin", "/player/:id", "/notifications",
-    "/crew","/match-lobby", "/challenge-select", "/safety", "/lobby-hub", "/group",
-    "/create-group", "/group-management", "/search-players"
+    "/wallet", "/manager", "/match-review", "/admin", "/player", "/notifications",
+    "/crew", "/match-lobby", "/challenge-select", "/safety", "/lobby-hub", "/group",
+    "/create-group", "/group-management", "/search-players", "/submit-result", "/profile",
+    "/community", "/tournaments", "/contact", "/about", "/terms", "/privacy",
+    "/owner-login", "/admin-login", "/my-bookings", "/venue-manager", "/policies",
+    "/create-appeal", "/arena-legends", "/play-area", "/standard-profile",
+    "/inbox", "/chat"
   ];
-  
-  const shouldHide = hideLayoutPaths.some(path => location.pathname.startsWith(path));
+
+  const shouldHide = hideLayoutPaths.some(path => 
+    location.pathname.startsWith(path)
+  );
 
   return (
     <>
       {!shouldHide && <Navbar />}
       <Routes>
         <Route path="/" element={<Home />} />
-        
-        {/* MARKETPLACE EXPLORE PAGE */}
-        <Route path="/booking" element={<Explore />} /> 
-        
+        <Route path="/booking" element={<Explore />} />
         <Route path="/login" element={<Login />} />
         <Route path="/about" element={<About />} />
         <Route path="/policies" element={<Policies />} />
@@ -95,9 +105,16 @@ function LayoutContent() {
         <Route path="/safety" element={<SafetyCenter />} />
         <Route path="/lobby-hub" element={<LobbyHub />} />
         <Route path="/group/:id" element={<GroupDetails />} />
-        <Route path="/create-group" element={<CreateGroup />} />    
+        <Route path="/create-group" element={<CreateGroup />} />
         <Route path="/group-management" element={<GroupManagement />} />
         <Route path="/search-players" element={<SearchPlayer />} />
+        <Route path="/owner-login" element={<OwnerLogin />} />
+        <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/create-appeal" element={<CreateAppealModal />} />
+        <Route path="/arena-legends" element={<ArenaLegends />} />
+        <Route path="/standard-profile" element={<StandardProfile />} />
+        <Route path="/inbox" element={<Inbox />} />
+        <Route path="/chat/:type/:id" element={<UniversalChat />} />
 
       </Routes>
       {!shouldHide && <Footer />}
@@ -108,6 +125,7 @@ function LayoutContent() {
 export default function App() {
   return (
     <Router>
+      <ScrollToTop />   {/* ✅ THIS FIXES SCROLL ISSUE */}
       <LayoutContent />
     </Router>
   );

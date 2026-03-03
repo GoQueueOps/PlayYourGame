@@ -1,6 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { 
-  X, CheckCircle2, Circle, Search, Clock, Users, Trophy, Calendar
+  X, 
+  CheckCircle2, 
+  Circle, 
+  Search, 
+  Clock, 
+  Users,
+  Trophy,
+  Calendar
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -15,6 +22,8 @@ const ARENA_DATABASE = [
 function CreateAppealModal({ isOpen, onClose, onCreate }) {
   const [step, setStep] = useState(1);
   const [bookingStatus, setBookingStatus] = useState("booked");
+  
+  // Form States
   const [sport, setSport] = useState("Cricket");
   const [venueSearch, setVenueSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -26,7 +35,9 @@ function CreateAppealModal({ isOpen, onClose, onCreate }) {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) setShowSuggestions(false);
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -37,7 +48,6 @@ function CreateAppealModal({ isOpen, onClose, onCreate }) {
   );
 
   const handlePublish = () => {
-    // COMPULSORY FIELD CHECK
     if (!venueSearch.trim() || !time.trim() || !date.trim()) {
       alert("⚠️ ALL FIELDS ARE COMPULSORY!");
       return;
@@ -54,6 +64,7 @@ function CreateAppealModal({ isOpen, onClose, onCreate }) {
     };
     if (onCreate) onCreate(appealData);
     onClose();
+    // Reset Modal for next time
     setStep(1); setVenueSearch(""); setTime(""); setDate(""); setPlayersNeeded(1);
   };
 
@@ -70,12 +81,14 @@ function CreateAppealModal({ isOpen, onClose, onCreate }) {
             <h2 className="text-3xl text-white italic tracking-tighter">Create Appeal</h2>
             <p className="text-[11px] text-emerald-500 mt-1 uppercase tracking-[0.2em] font-bold">Step {step} of 2</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-all bg-white/5 p-2 rounded-full"><X size={24} /></button>
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-all bg-white/5 p-2 rounded-full">
+            <X size={24} />
+          </button>
         </div>
 
         {step === 1 ? (
           <div className="space-y-6">
-            <p className="text-xs text-slate-300 tracking-widest font-bold">Venue Status</p>
+            <p className="text-xs text-slate-300 tracking-widest font-bold uppercase">Venue Status</p>
             <div className="grid gap-4">
               {['booked', 'not-booked'].map((status) => (
                 <button 
@@ -85,12 +98,12 @@ function CreateAppealModal({ isOpen, onClose, onCreate }) {
                   {bookingStatus === status ? <CheckCircle2 className="text-emerald-500" size={24} /> : <Circle className="text-slate-600" size={24} />}
                   <div>
                     <p className="text-sm text-white font-black">{status === 'booked' ? "I HAVE ALREADY BOOKED" : "NO BOOKING YET"}</p>
-                    <p className="text-[10px] text-slate-400 mt-1 font-bold">{status === 'booked' ? "Players join existing slot" : "Split cost & book together"}</p>
+                    <p className="text-[10px] text-slate-400 mt-1 font-bold tracking-widest">{status === 'booked' ? "I need players to join my slot" : "We split cost and book together"}</p>
                   </div>
                 </button>
               ))}
             </div>
-            <button onClick={() => setStep(2)} className="w-full bg-emerald-500 text-black py-5 rounded-2xl text-sm tracking-widest mt-4 active:scale-95 transition-all shadow-lg hover:bg-emerald-400 font-black uppercase">
+            <button onClick={() => setStep(2)} className="w-full bg-emerald-500 text-black py-5 rounded-2xl text-sm tracking-widest mt-4 shadow-lg hover:bg-emerald-400 transition-all active:scale-95 font-black uppercase">
               Continue »
             </button>
           </div>
@@ -106,7 +119,7 @@ function CreateAppealModal({ isOpen, onClose, onCreate }) {
             </div>
 
             <div className="space-y-2 relative" ref={suggestionsRef}>
-              <label className="text-[11px] text-emerald-500 flex items-center gap-2 font-bold"><Search size={14}/> {bookingStatus === 'booked' ? 'Which Arena?' : 'Preferred Venue'}</label>
+              <label className="text-[11px] text-emerald-500 flex items-center gap-2 font-bold"><Search size={14}/> {bookingStatus === 'booked' ? 'Which Court/Arena?' : 'Preferred Venue'}</label>
               <input 
                 type="text" placeholder="TYPE ARENA NAME..." value={venueSearch}
                 onFocus={() => setShowSuggestions(true)}
