@@ -41,9 +41,13 @@ function Navbar() {
           </Link>
         ) : (
           <div className="flex items-center gap-4">
-            <span className="text-white text-[10px] font-black uppercase tracking-widest">
+            {/* 👇 CLICKABLE USER NAME */}
+            <button
+              onClick={() => navigate("/profile")}
+              className="text-white text-[10px] font-black uppercase tracking-widest hover:text-green-400 transition-all"
+            >
               {user.user_metadata?.full_name || "Player"}
-            </span>
+            </button>
 
             <button
               onClick={handleLogout}
