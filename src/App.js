@@ -86,7 +86,7 @@ function LayoutContent() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/success" element={<BookingSuccess />} />
         <Route path="/play-area/:id" element={<PlayAreaDetail />} />
-        <Route path="/superadmin-portal" element={<ProtectedRoute><Profile /></ProtectedRoute>} />  "/superadmin-portal"
+        <Route path="/superadmin-portal" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />  
         <Route path="/my-bookings" element={<MyBookings />} />
         <Route path="/challenge" element={<ChallengeMode />} />
         <Route path="/find-players" element={<FindPlayers />} />
@@ -97,7 +97,7 @@ function LayoutContent() {
         <Route path="/community" element={<CommunityGroups />} />
         <Route path="/tournaments" element={<Tournaments />} />
         <Route path="/match-review" element={<MatchReview />} />
-        <Route path="/admin" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><AdminControlCenter /></ProtectedRoute>} />
         <Route path="/match-lobby" element={<MatchLobby />} />
         <Route path="/player/:id" element={<PlayerProfile />} />
         <Route path="/notifications" element={<NotificationCenter />} />
