@@ -42,25 +42,65 @@ function Login() {
   // ─── EMAIL AUTH FLOW ────────────────────────────────
 
   const handleEmailAction = async () => {
-    setLoading(true);
-    if (emailExists) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) alert(error.message);
-      else navigate("/");
-    } else {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName } },
-      });
-      if (error) alert(error.message);
-      else {
-        alert("Account created successfully!");
-        navigate("/");
-      }
+  setLoading(true);
+
+  if (emailExists) {
+    // 🔐 LOGIN
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message);
+      setLoading(false);
+      return;
     }
+
+    navigate("/");
     setLoading(false);
-  };
+    return;
+  }
+
+  // 🆕 SIGNUP
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+      },
+    },
+  });
+
+  if (error) {
+    alert(error.message);
+    setLoading(false);
+    return;
+  }
+
+  if (data?.user) {
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .insert([
+        {
+          id: data.user.id,
+          full_name: fullName,
+          city: "",
+          state: "",
+          country: "",
+        },
+      ]);
+
+    if (profileError) {
+      console.error("Profile insert error:", profileError.message);
+    }
+  }
+
+  alert("Account created successfully!");
+  navigate("/");
+  setLoading(false);
+};
 
   // ─── SOCIAL AUTH ────────────────────────────────────
 
