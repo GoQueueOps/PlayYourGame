@@ -48,7 +48,7 @@ function Footer() {
           <div className="space-y-6 bg-white/5 p-8 rounded-[2rem] border border-white/10">
             <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em]">Support</h4>
             <div className="space-y-1">
-              <p className="text-xs font-black text-white italic">jee.tejas@gmail.com</p>
+              <p className="text-xs font-black text-white italic">support@playyourgame.space</p>
               <p className="text-[10px] text-gray-500 font-bold uppercase">Response within 24 hours</p>
             </div>
             <button className="w-full bg-white text-black py-3 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
