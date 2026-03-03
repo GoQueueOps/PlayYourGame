@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, Timer, Users, ShieldCheck,
   Handshake, Smile, Copy, Check,
-  Settings, Share2, MapPin, Flame, Search
+  Settings, Share2, MapPin, Flame, Search, profileError
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "../lib/supabase";
