@@ -7,7 +7,7 @@ function Login() {
   const navigate = useNavigate();
 
   const [loginMethod, setLoginMethod] = useState("phone");
-  const [otpSent, setOtpSent] = useState(false);
+  const [otpSent] = useState(false);
 
   const [emailExists, setEmailExists] = useState(null);
   const [email, setEmail] = useState("");
@@ -18,7 +18,7 @@ function Login() {
   const checkEmail = async () => {
     if (!email) return;
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password: "temporary-check-password",
     });
