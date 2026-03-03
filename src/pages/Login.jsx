@@ -80,7 +80,17 @@ function Login() {
   }
 
   if (data?.user) {
-    
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .insert([
+        {
+          id: data.user.id,
+          full_name: fullName,
+          city: "",
+          state: "",
+          country: "",
+        },
+      ]);
 
     if (profileError) {
       console.error("Profile insert error:", profileError.message);
