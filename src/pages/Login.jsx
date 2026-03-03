@@ -71,8 +71,12 @@ function Login() {
         password,
         options: { data: { full_name: fullName } }
       });
-      if (error) alert("Check your email for confirmation!");
-      else navigate("/");
+      if (error) {
+  alert(error.message);
+} else {
+  alert("Account created successfully!");
+  navigate("/");
+}
     }
     setLoading(false);
   };
