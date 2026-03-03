@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "../supabase";
+// This goes up to 'src', then down into 'lib' to find 'supabase'
+import { supabase } from "../lib/supabase";
 
 function Login() {
   const navigate = useNavigate();
@@ -70,8 +71,12 @@ function Login() {
         password,
         options: { data: { full_name: fullName } }
       });
-      if (error) alert("Check your email for confirmation!");
-      else navigate("/");
+      if (error) {
+  alert(error.message);
+} else {
+  alert("Account created successfully!");
+  navigate("/");
+}
     }
     setLoading(false);
   };
