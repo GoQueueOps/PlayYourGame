@@ -228,9 +228,20 @@ function Login() {
             </button>
           </div>
         </div>
+         {/* BUSINESS ACCESS */}
+        <div className="pt-8">
+          <div className="bg-white/5 border border-white/5 p-5 rounded-[2.5rem] flex flex-col gap-3">
+            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest text-center">Business Portal</p>
+            <div className="flex gap-3">
+              <button onClick={() => navigate("/owner-login")} className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl text-[9px] font-black uppercase text-blue-400 hover:bg-blue-400/10">Owner</button>
+              <button onClick={() => navigate("/admin-login")} className="flex-1 bg-white/5 border border-white/10 py-3 rounded-xl text-[9px] font-black uppercase text-purple-400 hover:bg-purple-400/10">Admin</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 export default Login;
+
