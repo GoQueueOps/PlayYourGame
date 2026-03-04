@@ -1,26 +1,40 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  ChevronLeft, Timer, Users, ShieldCheck, 
-  Handshake, Smile, Copy, Check,
-  Settings, Share2, MapPin, Flame, Search
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../context/AuthContext";
 
 function UserProfile() {
   const navigate = useNavigate();
-  const [selectedBadge, setSelectedBadge] = useState(null);
-  const [copied, setCopied] = useState(false);
+  // AUTH DATA
+  const { user } = useAuth();
 
-  // MOCK DATA
-  const user = {
-    name: "Tejas",
-    athleteId: "TEJ9201", 
-    gender: "male",
-    location: "Cuttack, Odisha",
-    stats: { games: 24, rank: 9, friends: 142 }, // Added friends count
-    auraScore: 92 
-  };
+const [profile, setProfile] = useState({
+  name: "",
+  city: "",
+  state: "",
+});
+
+const [selectedBadge, setSelectedBadge] = useState(null);
+const [copied, setCopied] = useState(false);
+
+
+  useEffect(() => {
+    if (user) fetchProfile();
+  }, [user]);
+
+  async function fetchProfile() {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("name, city, state")
+      .eq("id", user.id)
+      .single();
+
+    if (error) {
+      console.error(error);
+    } else {
+      setProfile(data);
+    }
+  }
 
   const copyAthleteId = () => {
     navigator.clipboard.writeText(user.athleteId);
@@ -30,7 +44,7 @@ function UserProfile() {
 
   const handleShare = async () => {
     const shareData = {
-      title: `${user.name}'s Athlete Profile`,
+      title: `${profile.name}'s Athlete Profile`,
       text: `Search for my Athlete ID: #${user.athleteId} on Arena Legends!`,
       url: window.location.href,
     };
@@ -83,7 +97,7 @@ function UserProfile() {
           </div>
         </div>
         
-        <h2 className="text-3xl font-black uppercase italic tracking-tighter leading-none">{user.name}</h2>
+        <h2 className="text-3xl font-black uppercase italic tracking-tighter leading-none">{profile.name}</h2>
         
         <div 
           onClick={copyAthleteId}
@@ -95,7 +109,7 @@ function UserProfile() {
 
         <div className="flex items-center gap-2 text-slate-500 mt-4">
           <MapPin size={12} className="text-emerald-500" />
-          <span className="text-[9px] font-black uppercase tracking-[0.2em]">{user.location}</span>
+          <span className="text-[9px] font-black uppercase tracking-[0.2em]">{profile.city}, {profile.state}</span>
         </div>
       </section>
 
