@@ -68,7 +68,7 @@ function Settings() {
     fetchUserData();
   }, [navigate]);
 
-  // ─── MOUSE PARALLAX (NOW USED BELOW) ──────────────────
+  // ─── MOUSE PARALLAX ──────────────────
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (containerRef.current) {
@@ -82,6 +82,28 @@ function Settings() {
     window.addEventListener("mousemove", handleMouseMove);
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
+
+  // ─── RESTORED FUNCTIONS ──────────────────
+  const openChangeModal = (type) => {
+    setChangeType(type);
+    setNewValue("");
+    setIsModalOpen(true);
+  };
+
+  const handleUpdateComplete = async () => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return;
+
+    const updateObj = { [changeType]: newValue };
+    const { error } = await supabase.from('profiles').update(updateObj).eq('id', authUser.id);
+    
+    if (!error) {
+      setUser(prev => ({ ...prev, ...updateObj }));
+      setIsModalOpen(false);
+    } else {
+      alert(error.message);
+    }
+  };
 
   const detectLocation = () => {
     if (!("geolocation" in navigator)) {
@@ -107,31 +129,19 @@ function Settings() {
       } finally {
         setLocLoading(false);
       }
-    });
-  };
-
-  const handleUpdateComplete = async () => {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    const updateObj = { [changeType]: newValue };
-    const { error } = await supabase.from('profiles').update(updateObj).eq('id', authUser.id);
-    if (!error) {
-      setUser(prev => ({ ...prev, ...updateObj }));
-      setIsModalOpen(false);
-    }
+    }, () => setLocLoading(false));
   };
 
   return (
     <div ref={containerRef} className="min-h-screen bg-[#020617] text-white pb-32 italic font-black relative overflow-hidden">
       
-      {/* 🚀 FIXED: mousePosition is now used here to eliminate the ESLint error */}
+      {/* BACKGROUND GLOW */}
       <motion.div 
-        animate={{ 
-          x: mousePosition.x * 40, 
-          y: mousePosition.y * 40 
-        }}
+        animate={{ x: mousePosition.x * 40, y: mousePosition.y * 40 }}
         className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none"
       />
 
+      {/* STICKY HEADER */}
       <div className="sticky top-0 z-40 backdrop-blur-xl border-b border-white/10 bg-black/40">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <button onClick={() => navigate(-1)} className="p-2.5 bg-white/10 border border-white/20 rounded-xl">
@@ -144,6 +154,7 @@ function Settings() {
 
       <div className="max-w-3xl mx-auto px-6 mt-8 relative z-10">
         
+        {/* PROFILE SECTION */}
         <section className="bg-gradient-to-br from-white/10 to-white/5 p-8 rounded-[2.5rem] border border-white/20 mb-8 backdrop-blur-md">
           <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
             <div className="relative group">
@@ -176,6 +187,7 @@ function Settings() {
             )}
           </AnimatePresence>
 
+          {/* LOCATION SUB-SECTION */}
           <div className="pt-6 border-t border-white/10 mt-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -199,6 +211,7 @@ function Settings() {
           </div>
         </section>
 
+        {/* ACCOUNT CARDS */}
         <div className="space-y-4 mb-8">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
             <Lock size={14} className="text-emerald-400" />
@@ -206,13 +219,13 @@ function Settings() {
           </h2>
 
           <div className="bg-white/5 border border-white/10 p-6 rounded-2xl flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 overflow-hidden">
               <div className="p-3 bg-blue-500/20 rounded-xl border border-blue-500/30">
                 <Mail size={20} className="text-blue-400" />
               </div>
-              <div>
+              <div className="truncate">
                 <p className="text-[9px] text-slate-500 uppercase">Email</p>
-                <p className="text-sm uppercase truncate max-w-[180px]">{user.email}</p>
+                <p className="text-sm uppercase truncate">{user.email}</p>
               </div>
             </div>
             <button onClick={() => openChangeModal('email')} className="p-2.5 bg-white/5 rounded-xl border border-white/10 text-blue-400"><RefreshCw size={16}/></button>
@@ -232,6 +245,7 @@ function Settings() {
           </div>
         </div>
 
+        {/* LOGOUT BUTTON */}
         <button 
           onClick={async () => { await supabase.auth.signOut(); navigate("/login"); }}
           className="w-full bg-red-500/10 border border-red-500/30 text-red-500 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-red-500 hover:text-white transition-all shadow-lg"
@@ -240,6 +254,7 @@ function Settings() {
         </button>
       </div>
 
+      {/* UPDATE MODAL */}
       <AnimatePresence>
         {isModalOpen && (
           <>
