@@ -29,7 +29,7 @@ function UserProfile() {
   const [profile, setProfile] = useState({
     name: "",
     city: "",
-    state: "",
+    state: ""
   });
 
   const [selectedBadge, setSelectedBadge] = useState(null);
@@ -44,70 +44,70 @@ function UserProfile() {
   };
 
   useEffect(() => {
-    if (user) fetchProfile();
+
+    if (!user) return;
+
+    const fetchProfile = async () => {
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("name, city, state")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      setProfile(data);
+
+    };
+
+    fetchProfile();
+
   }, [user]);
 
-  async function fetchProfile() {
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("name, city, state")
-      .eq("id", user.id)
-      .single();
-
-    if (error) {
-      console.error(error);
-    } else {
-      setProfile(data);
-    }
-
-  }
-
   const copyAthleteId = () => {
+
+    if (!user) return;
+
     navigator.clipboard.writeText(user.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+
   };
 
   const handleShare = async () => {
 
     const shareData = {
       title: `${profile.name}'s Athlete Profile`,
-      text: `Search for my Athlete ID: #${user.id} on PlayYourGame!`,
-      url: window.location.href,
+      text: `Search my Athlete ID: #${user?.id} on PlayYourGame`,
+      url: window.location.href
     };
 
     try {
+
       if (navigator.share) {
         await navigator.share(shareData);
       } else {
         await navigator.clipboard.writeText(window.location.href);
-        alert("Profile link copied!");
+        alert("Profile link copied");
       }
+
     } catch (err) {
-      console.log("Error sharing:", err);
+      console.log(err);
     }
 
   };
 
-  const getPronoun = (type) => {
-
-    const map = {
-      subject: "he",
-      possessive: "his"
-    };
-
-    return map[type];
-
-  };
-
-  const [vibeCheck] = useState([
+  const vibeCheck = [
     {
       id: "on-time",
       name: "On-Time Cheetah",
       icon: <Timer />,
       votes: 14,
-      desc: `Arrives before the whistle blows every single time.`,
+      desc: "Arrives before the whistle blows every time.",
       color: "text-emerald-400"
     },
     {
@@ -115,7 +115,7 @@ function UserProfile() {
       name: "Squad Soul",
       icon: <Users />,
       votes: 8,
-      desc: `Doesn't just play; ${getPronoun("subject")} coordinates the whole unit.`,
+      desc: "Coordinates the whole team during matches.",
       color: "text-blue-400"
     },
     {
@@ -123,7 +123,7 @@ function UserProfile() {
       name: "Accha Baccha",
       icon: <ShieldCheck />,
       votes: 22,
-      desc: "Honest, quick with payments, and follows all ground rules.",
+      desc: "Honest and follows all ground rules.",
       color: "text-yellow-400"
     },
     {
@@ -131,7 +131,7 @@ function UserProfile() {
       name: "Trustable",
       icon: <Handshake />,
       votes: -2,
-      desc: `When ${getPronoun("subject")} says ${getPronoun("subject")}'s coming, the team knows ${getPronoun("subject")}'ll be there.`,
+      desc: "If they say they're coming, they will.",
       color: "text-purple-400"
     },
     {
@@ -139,14 +139,14 @@ function UserProfile() {
       name: "Vibe Master",
       icon: <Smile />,
       votes: 11,
-      desc: `Makes the game fun for everyone, win or lose.`,
+      desc: "Makes the game fun for everyone.",
       color: "text-orange-400"
     }
-  ]);
+  ];
 
   return (
 
-    <div className="min-h-screen bg-[#020617] text-white p-6 pb-32 select-none italic font-black">
+    <div className="min-h-screen bg-[#020617] text-white p-6 pb-32">
 
       {/* HEADER */}
 
@@ -198,22 +198,22 @@ function UserProfile() {
         </div>
 
         <h2 className="text-3xl font-black uppercase">
-          {profile.name}
+          {profile.name || "Athlete"}
         </h2>
 
         <div
           onClick={copyAthleteId}
           className="mt-3 px-4 py-1.5 bg-white/5 rounded-full border border-white/5 flex items-center gap-2 cursor-pointer"
         >
+
           <span className="text-[10px] text-slate-400 uppercase">
             ID: #{user?.id}
           </span>
 
-          {copied ? (
-            <Check size={10} className="text-emerald-500" />
-          ) : (
-            <Copy size={10} className="text-slate-500" />
-          )}
+          {copied
+            ? <Check size={10} className="text-emerald-500" />
+            : <Copy size={10} className="text-slate-500" />
+          }
 
         </div>
 
@@ -264,30 +264,9 @@ function UserProfile() {
 
         </div>
 
-        {/* STATS */}
-
-        <div className="flex justify-between mt-6 pt-6 border-t border-white/5">
-
-          <div className="text-center flex-1">
-            <p>{stats.games}</p>
-            <p className="text-[7px] text-slate-500 uppercase">Matches</p>
-          </div>
-
-          <div className="text-center flex-1">
-            <p>{stats.friends}</p>
-            <p className="text-[7px] text-slate-500 uppercase">Friends</p>
-          </div>
-
-          <div className="text-center flex-1 text-emerald-500">
-            <p>#{stats.rank}</p>
-            <p className="text-[7px] uppercase">Global Rank</p>
-          </div>
-
-        </div>
-
       </section>
 
-      {/* VIBE CHECK */}
+      {/* BADGES */}
 
       <section>
 
