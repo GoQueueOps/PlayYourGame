@@ -3,17 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { 
-  Mail, Phone, Zap, Coins, Camera, Plus, LogOut, RefreshCw, X,
-  ChevronLeft, Lock, Shield, Sparkles, Check, ArrowRight, MapPin
+  Mail, Phone, Camera, LogOut, RefreshCw, X,
+  ChevronLeft, Lock, Shield, MapPin
 } from "lucide-react";
 
-const RECENT_SESSIONS = [
-  { id: "PG-X921", arena: "Krater's Arena", date: "05 Feb 2026", sport: "Cricket", status: "Completed", zUsed: 50, price: 450 },
-  { id: "PG-B102", arena: "Sector 9 Turf", date: "02 Feb 2026", sport: "Football", status: "Completed", zUsed: 0, price: 600 },
-  { id: "PG-A442", arena: "Apex Padel", date: "15 Jan 2026", sport: "Padel", status: "Completed", zUsed: 100, price: 800 }
-];
-
-const DEFAULT_AVATARS = ["🦁", "🐯", "🐱", "🦊", "🐻", "🐺", "🦅", "🐉"];
+// Removed Zap, Coins, Plus, Sparkles, Check, ArrowRight to fix build errors
 
 function Settings() {
   const navigate = useNavigate();
@@ -39,9 +33,9 @@ function Settings() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [changeType, setChangeType] = useState(null);
-  const [step, setStep] = useState(1);
   const [newValue, setNewValue] = useState("");
-  const [otp, setOtp] = useState(["", "", "", ""]);
+
+  const DEFAULT_AVATARS = ["🦁", "🐯", "🐱", "🦊", "🐻", "🐺", "🦅", "🐉"];
 
   // ─── FETCH LIVE DATA FROM SUPABASE ──────────────────
   useEffect(() => {
@@ -67,7 +61,7 @@ function Settings() {
           gPoints: profile.g_points || 0,
           avatar: profile.avatar || "🦁",
           verified: profile.verified || false,
-          joinedDate: new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          joinedDate: profile.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : "2026",
           city: profile.city || "",
           state: profile.state || "",
           country: profile.country || ""
@@ -115,7 +109,7 @@ function Settings() {
     });
   };
 
-  // Parallax Effect
+  // Mouse Parallax Effect
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (containerRef.current) {
@@ -133,7 +127,6 @@ function Settings() {
   const openChangeModal = (type) => {
     setChangeType(type);
     setNewValue("");
-    setStep(1);
     setIsModalOpen(true);
   };
 
@@ -144,17 +137,9 @@ function Settings() {
     const { error } = await supabase.from('profiles').update(updateObj).eq('id', authUser.id);
     if (error) alert(error.message);
     else {
-      setUser({ ...user, ...updateObj });
+      setUser(prev => ({ ...prev, ...updateObj }));
       setIsModalOpen(false);
     }
-  };
-
-  const handleOtpChange = (index, value) => {
-    if (value.length > 1) return;
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-    if (value && index < 3) document.getElementById(`otp-${index + 1}`)?.focus();
   };
 
   return (
@@ -194,7 +179,25 @@ function Settings() {
             </div>
           </div>
 
-          {/* 📍 NEW LOCATION SECTION */}
+          {/* AVATAR PICKER */}
+          <AnimatePresence>
+            {showAvatarPicker && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }} 
+                animate={{ height: "auto", opacity: 1 }} 
+                exit={{ height: 0, opacity: 0 }}
+                className="flex flex-wrap gap-3 mb-8 justify-center"
+              >
+                {DEFAULT_AVATARS.map(av => (
+                  <button key={av} onClick={() => { setUser(p => ({...p, avatar: av})); setShowAvatarPicker(false); }} className="text-3xl p-3 bg-white/5 rounded-xl border border-white/10">
+                    {av}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 📍 LOCATION SECTION */}
           <div className="pt-6 border-t border-white/10 mt-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -222,7 +225,7 @@ function Settings() {
           </div>
         </section>
 
-        {/* ACCOUNT CARDS */}
+        {/* ACCOUNT DETAILS */}
         <div className="space-y-4 mb-8">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
             <Lock size={14} className="text-emerald-400" />
@@ -259,7 +262,7 @@ function Settings() {
         {/* LOGOUT */}
         <button 
           onClick={async () => { await supabase.auth.signOut(); navigate("/login"); }}
-          className="w-full bg-red-500/10 border border-red-500/30 text-red-500 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-red-500 hover:text-white transition-all"
+          className="w-full bg-red-500/10 border border-red-500/30 text-red-500 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-red-500 hover:text-white transition-all shadow-lg"
         >
           <LogOut size={16} /> Logout Account
         </button>
