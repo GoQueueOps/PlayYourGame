@@ -17,7 +17,7 @@ function Settings() {
     email: "",
     phone: "",
     avatar_url: "👤",
-    lastNameChange: null,
+    lastNameChange: null, // Tracks last_name_change from DB
     city: "",
     state: ""
   });
@@ -59,38 +59,29 @@ function Settings() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const updateAvatar = async (url) => {
-    setLoading(true);
-    const { error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id);
-    if (!error) setUser(prev => ({ ...prev, avatar_url: url }));
-    setShowAvatarPicker(false);
-    setLoading(false);
-  };
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setLoading(true);
-    const fileName = `${user.id}-${Date.now()}`;
-    const { error: upErr } = await supabase.storage.from('avatars').upload(fileName, file);
-    if (upErr) { alert(upErr.message); setLoading(false); return; }
-    
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
-    await updateAvatar(publicUrl);
-  };
-
   const handleRequestOTP = async () => {
     setLoading(true);
     try {
       if (changeType === 'name') {
-        const sixMonths = 180 * 24 * 60 * 60 * 1000;
-        const last = user.lastNameChange ? new Date(user.lastNameChange).getTime() : 0;
-        if (Date.now() - last < sixMonths) {
-          const days = Math.ceil((sixMonths - (Date.now() - last)) / (86400000));
-          throw new Error(`Identity locked for ${days} days.`);
+        // --- 6 MONTH LOCK LOGIC ---
+        const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
+        const lastChangeTime = user.lastNameChange ? new Date(user.lastNameChange).getTime() : 0;
+        const currentTime = Date.now();
+
+        if (currentTime - lastChangeTime < SIX_MONTHS_MS) {
+          const daysRemaining = Math.ceil((SIX_MONTHS_MS - (currentTime - lastChangeTime)) / (1000 * 60 * 60 * 24));
+          throw new Error(`Identity Locked: You can change your name again in ${daysRemaining} days.`);
         }
-        await supabase.from('profiles').update({ name: newValue, last_name_change: new Date().toISOString() }).eq('id', user.id);
-        setUser(prev => ({ ...prev, name: newValue }));
+
+        const nowIso = new Date().toISOString();
+        const { error } = await supabase.from('profiles').update({ 
+          name: newValue, 
+          last_name_change: nowIso 
+        }).eq('id', user.id);
+
+        if (error) throw error;
+        
+        setUser(prev => ({ ...prev, name: newValue, lastNameChange: nowIso }));
         setIsModalOpen(false);
       } 
       else {
@@ -102,6 +93,8 @@ function Settings() {
     } catch (err) { alert(err.message); }
     setLoading(false);
   };
+
+  // ... rest of the helper functions (handleVerifyOTP, updateAvatar, handleFileUpload)
 
   const handleVerifyOTP = async (otpCode) => {
     setLoading(true);
@@ -122,9 +115,28 @@ function Settings() {
     setLoading(false);
   };
 
+  const updateAvatar = async (url) => {
+    setLoading(true);
+    const { error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id);
+    if (!error) setUser(prev => ({ ...prev, avatar_url: url }));
+    setShowAvatarPicker(false);
+    setLoading(false);
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setLoading(true);
+    const fileName = `${user.id}-${Date.now()}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(fileName, file);
+    if (upErr) { alert(upErr.message); setLoading(false); return; }
+    
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
+    await updateAvatar(publicUrl);
+  };
+
   return (
     <div className="min-h-screen bg-[#020617] text-white pb-32 italic font-black">
-      
       {/* HEADER */}
       <div className="sticky top-0 z-40 backdrop-blur-xl border-b border-white/10 bg-black/40 px-6 py-4 flex items-center justify-between">
         <button onClick={() => navigate(-1)} className="p-2.5 bg-white/10 rounded-xl active:scale-90 transition-transform"><ChevronLeft size={20}/></button>
@@ -133,12 +145,11 @@ function Settings() {
       </div>
 
       <div className="max-w-3xl mx-auto px-6 mt-8 space-y-8">
-        
         {/* PROFILE CARD */}
         <section className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 text-center shadow-xl">
           <div className="relative inline-block mb-6">
             <div className="w-32 h-32 bg-slate-800 rounded-[2.5rem] overflow-hidden border-4 border-emerald-500/30 flex items-center justify-center text-5xl">
-              {user.avatar_url.startsWith('http') ? <img src={user.avatar_url} className="w-full h-full object-cover" alt="Avatar" /> : user.avatar_url}
+              {user.avatar_url?.startsWith('http') ? <img src={user.avatar_url} className="w-full h-full object-cover" alt="Avatar" /> : user.avatar_url}
             </div>
             <button onClick={() => setShowAvatarPicker(!showAvatarPicker)} className="absolute bottom-0 right-0 bg-emerald-500 p-3 rounded-xl border-4 border-[#020617] active:scale-95 transition-transform">
               {loading ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
@@ -169,7 +180,7 @@ function Settings() {
         <section className="bg-white/5 p-6 rounded-3xl border border-white/10 space-y-4">
           <div className="flex items-center gap-3 text-emerald-400">
             <MapPin size={18} />
-            <span className="text-[10px] uppercase tracking-widest text-slate-400">Current Residence</span>
+            <span className="text-[10px] uppercase tracking-widest text-slate-400">Location Details</span>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-black/20 p-5 rounded-2xl border border-white/5 text-center">
@@ -185,7 +196,7 @@ function Settings() {
 
         {/* SECURITY ROWS */}
         <div className="space-y-4">
-          <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.3em] px-2 flex items-center gap-2"><Lock size={14} className="text-emerald-400"/> Security Details</h3>
+          <h3 className="text-[10px] text-slate-500 uppercase tracking-[0.3em] px-2 flex items-center gap-2"><Lock size={14} className="text-emerald-400"/> Security</h3>
           <SecurityRow icon={<Mail className="text-blue-400"/>} label="Email Address" value={user.email} onEdit={() => { setChangeType('email'); setNewValue(""); setIsModalOpen(true); setOtpStep(false); }} />
           <SecurityRow icon={<Phone className="text-emerald-400"/>} label="Phone Number" value={user.phone} onEdit={() => { setChangeType('phone'); setNewValue(""); setIsModalOpen(true); setOtpStep(false); }} />
         </div>
@@ -211,11 +222,11 @@ function Settings() {
         </div>
 
         <button onClick={async () => { await supabase.auth.signOut(); navigate("/login"); }} className="w-full bg-red-500/10 border border-red-500/30 text-red-500 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-all">
-          <LogOut size={16} /> Terminate Session
+          <LogOut size={16} /> Logout
         </button>
       </div>
 
-      {/* OTP / UPDATE MODAL */}
+      {/* MODAL */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
@@ -244,7 +255,6 @@ function Settings() {
   );
 }
 
-// Sub-components
 const SecurityRow = ({ icon, label, value, onEdit }) => (
   <div className="bg-white/5 p-6 rounded-2xl border border-white/10 flex justify-between items-center group hover:border-emerald-500/20 transition-colors">
     <div className="flex items-center gap-4">
