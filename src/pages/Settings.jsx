@@ -257,8 +257,7 @@ function Settings() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
-    </div>
+ 
   );
 }
 
