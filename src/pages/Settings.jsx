@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "../supabase"; // Ensure this path is correct
+import { supabase } from "../lib/supabase";
 import { 
   Mail, Phone, Zap, Coins, Camera, Plus, LogOut, RefreshCw, X,
   ChevronLeft, Lock, Shield, Sparkles, Check, ArrowRight, MapPin
