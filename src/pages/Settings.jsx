@@ -7,14 +7,11 @@ import {
   ChevronLeft, Lock, Shield, MapPin
 } from "lucide-react";
 
-// Removed Zap, Coins, Plus, Sparkles, Check, ArrowRight to fix build errors
-
 function Settings() {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   
-  // LIVE USER STATE
   const [user, setUser] = useState({
     name: "Loading...",
     email: "",
@@ -37,7 +34,7 @@ function Settings() {
 
   const DEFAULT_AVATARS = ["🦁", "🐯", "🐱", "🦊", "🐻", "🐺", "🦅", "🐉"];
 
-  // ─── FETCH LIVE DATA FROM SUPABASE ──────────────────
+  // ─── FETCH LIVE DATA ──────────────────
   useEffect(() => {
     const fetchUserData = async () => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -71,45 +68,7 @@ function Settings() {
     fetchUserData();
   }, [navigate]);
 
-  // ─── AUTO-LOCATION DETECTION ───────────────────────
-  const detectLocation = () => {
-    if (!("geolocation" in navigator)) {
-      alert("Geolocation is not supported by your browser");
-      return;
-    }
-
-    setLocLoading(true);
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      const { latitude, longitude } = position.coords;
-      try {
-        const res = await fetch(
-          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-        );
-        const data = await res.json();
-        
-        const updateData = {
-          city: data.city || data.locality || "",
-          state: data.principalSubdivision || "",
-          country: data.countryName || ""
-        };
-
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        await supabase.from('profiles').update(updateData).eq('id', authUser.id);
-        
-        setUser(prev => ({ ...prev, ...updateData }));
-        alert(`Location Set: ${updateData.city}, ${updateData.state}`);
-      } catch (err) {
-        console.error("Location error:", err);
-      } finally {
-        setLocLoading(false);
-      }
-    }, () => {
-      setLocLoading(false);
-      alert("Please allow location access in your browser.");
-    });
-  };
-
-  // Mouse Parallax Effect
+  // ─── MOUSE PARALLAX (NOW USED BELOW) ──────────────────
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (containerRef.current) {
@@ -124,31 +83,58 @@ function Settings() {
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
-  const openChangeModal = (type) => {
-    setChangeType(type);
-    setNewValue("");
-    setIsModalOpen(true);
+  const detectLocation = () => {
+    if (!("geolocation" in navigator)) {
+      alert("Geolocation is not supported");
+      return;
+    }
+    setLocLoading(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      try {
+        const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+        const data = await res.json();
+        const updateData = {
+          city: data.city || data.locality || "",
+          state: data.principalSubdivision || "",
+          country: data.countryName || ""
+        };
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        await supabase.from('profiles').update(updateData).eq('id', authUser.id);
+        setUser(prev => ({ ...prev, ...updateData }));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLocLoading(false);
+      }
+    });
   };
 
   const handleUpdateComplete = async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     const updateObj = { [changeType]: newValue };
-    
     const { error } = await supabase.from('profiles').update(updateObj).eq('id', authUser.id);
-    if (error) alert(error.message);
-    else {
+    if (!error) {
       setUser(prev => ({ ...prev, ...updateObj }));
       setIsModalOpen(false);
     }
   };
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-[#020617] text-white pb-32 italic font-black relative overflow-x-hidden">
+    <div ref={containerRef} className="min-h-screen bg-[#020617] text-white pb-32 italic font-black relative overflow-hidden">
       
-      {/* HEADER */}
+      {/* 🚀 FIXED: mousePosition is now used here to eliminate the ESLint error */}
+      <motion.div 
+        animate={{ 
+          x: mousePosition.x * 40, 
+          y: mousePosition.y * 40 
+        }}
+        className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none"
+      />
+
       <div className="sticky top-0 z-40 backdrop-blur-xl border-b border-white/10 bg-black/40">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-          <button onClick={() => navigate(-1)} className="p-2.5 bg-white/10 border border-white/20 rounded-xl hover:bg-white/20 transition-all">
+          <button onClick={() => navigate(-1)} className="p-2.5 bg-white/10 border border-white/20 rounded-xl">
             <ChevronLeft size={20} />
           </button>
           <h1 className="text-xl font-black uppercase tracking-tight">Settings</h1>
@@ -158,8 +144,7 @@ function Settings() {
 
       <div className="max-w-3xl mx-auto px-6 mt-8 relative z-10">
         
-        {/* PROFILE CARD */}
-        <section className="bg-gradient-to-br from-white/10 to-white/5 p-8 rounded-[2.5rem] border border-white/20 mb-8">
+        <section className="bg-gradient-to-br from-white/10 to-white/5 p-8 rounded-[2.5rem] border border-white/20 mb-8 backdrop-blur-md">
           <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
             <div className="relative group">
               <div className="w-32 h-32 bg-gradient-to-tr from-emerald-500 to-cyan-400 rounded-[2.5rem] flex items-center justify-center text-6xl border-3 border-white/30 shadow-2xl">
@@ -179,15 +164,9 @@ function Settings() {
             </div>
           </div>
 
-          {/* AVATAR PICKER */}
           <AnimatePresence>
             {showAvatarPicker && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0 }} 
-                animate={{ height: "auto", opacity: 1 }} 
-                exit={{ height: 0, opacity: 0 }}
-                className="flex flex-wrap gap-3 mb-8 justify-center"
-              >
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex flex-wrap gap-3 mb-8 justify-center">
                 {DEFAULT_AVATARS.map(av => (
                   <button key={av} onClick={() => { setUser(p => ({...p, avatar: av})); setShowAvatarPicker(false); }} className="text-3xl p-3 bg-white/5 rounded-xl border border-white/10">
                     {av}
@@ -197,18 +176,13 @@ function Settings() {
             )}
           </AnimatePresence>
 
-          {/* 📍 LOCATION SECTION */}
           <div className="pt-6 border-t border-white/10 mt-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <MapPin size={18} className="text-emerald-400" />
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Base Location</span>
               </div>
-              <button 
-                onClick={detectLocation}
-                disabled={locLoading}
-                className="text-[9px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 active:scale-95 transition-all"
-              >
+              <button onClick={detectLocation} disabled={locLoading} className="text-[9px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 active:scale-95 transition-all">
                 {locLoading ? "Locating..." : "Auto-Detect Location"}
               </button>
             </div>
@@ -225,7 +199,6 @@ function Settings() {
           </div>
         </section>
 
-        {/* ACCOUNT DETAILS */}
         <div className="space-y-4 mb-8">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
             <Lock size={14} className="text-emerald-400" />
@@ -259,7 +232,6 @@ function Settings() {
           </div>
         </div>
 
-        {/* LOGOUT */}
         <button 
           onClick={async () => { await supabase.auth.signOut(); navigate("/login"); }}
           className="w-full bg-red-500/10 border border-red-500/30 text-red-500 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-red-500 hover:text-white transition-all shadow-lg"
@@ -268,7 +240,6 @@ function Settings() {
         </button>
       </div>
 
-      {/* UPDATE MODAL */}
       <AnimatePresence>
         {isModalOpen && (
           <>
@@ -278,13 +249,7 @@ function Settings() {
                 <button onClick={() => setIsModalOpen(false)} className="absolute top-5 right-5 text-slate-400"><X size={20} /></button>
                 <div className="text-center space-y-4">
                    <h3 className="text-2xl uppercase">Update {changeType}</h3>
-                   <input 
-                      type="text" 
-                      value={newValue} 
-                      onChange={(e) => setNewValue(e.target.value)} 
-                      className="w-full bg-white/5 border border-white/20 p-4 rounded-xl outline-none focus:border-emerald-500"
-                      placeholder={`New ${changeType}...`}
-                   />
+                   <input type="text" value={newValue} onChange={(e) => setNewValue(e.target.value)} className="w-full bg-white/5 border border-white/20 p-4 rounded-xl outline-none focus:border-emerald-500" placeholder={`New ${changeType}...`} />
                    <button onClick={handleUpdateComplete} className="w-full bg-emerald-500 text-black py-4 rounded-xl font-black uppercase tracking-widest">Save Changes</button>
                 </div>
               </div>
