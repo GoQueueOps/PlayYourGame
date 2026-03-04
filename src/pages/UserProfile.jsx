@@ -19,7 +19,7 @@ import {
   Search
 } from "lucide-react";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 function UserProfile() {
 
@@ -36,12 +36,6 @@ function UserProfile() {
   const [copied, setCopied] = useState(false);
 
   const auraScore = 92;
-
-  const stats = {
-    games: 24,
-    friends: 142,
-    rank: 9
-  };
 
   useEffect(() => {
 
@@ -60,7 +54,9 @@ function UserProfile() {
         return;
       }
 
-      setProfile(data);
+      if (data) {
+        setProfile(data);
+      }
 
     };
 
@@ -74,7 +70,10 @@ function UserProfile() {
 
     navigator.clipboard.writeText(user.id);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
 
   };
 
@@ -307,24 +306,6 @@ function UserProfile() {
         </div>
 
       </section>
-
-      {/* MODAL */}
-
-      <AnimatePresence>
-
-        {selectedBadge && (
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setSelectedBadge(null)}
-            className="fixed inset-0 bg-black/80"
-          />
-
-        )}
-
-      </AnimatePresence>
 
     </div>
 
