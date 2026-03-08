@@ -8,7 +8,7 @@ import {
   Edit3,
   Loader2
 } from "lucide-react";
-import { supabase } from "../lib/supabase"; // Ensure this path is correct for your project
+import { supabase } from "../supabaseClient"; 
 
 function CreateChallenge({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
@@ -32,18 +32,26 @@ function CreateChallenge({ isOpen, onClose }) {
 
   // ─── LIVE DEPLOYMENT LOGIC ──────────────────────────────────────────────────
   const handleDeploy = async () => {
+    // Basic Validation
+    if (!formData.venue || !formData.date) {
+      alert("PLEASE FILL ALL FIELDS");
+      return;
+    }
+
     try {
       setLoading(true);
 
-      // 1. Get Current Authenticated User
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // 1. Get Current User Session
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      const user = authData?.session?.user;
       
       if (authError || !user) {
-        alert("Authentication required to deploy challenges.");
+        alert("SESSION EXPIRED: Please login again.");
         return;
       }
 
-      // 2. Insert into lobby_appeals (or challenges) table
+      // 2. Insert into Supabase
+      // Note: Ensure your table name is 'lobby_appeals' 
       const { error } = await supabase
         .from('lobby_appeals') 
         .insert([
@@ -53,21 +61,23 @@ function CreateChallenge({ isOpen, onClose }) {
             mode: formData.mode,
             needed_players: formData.mode === "Solo" ? 1 : formData.teamSize,
             stakes: formData.stakes,
-            venue_name: formData.venue, // Matches your input field
-            scheduled_at: formData.date,
+            venue_name: formData.venue, 
+            scheduled_at: new Date(formData.date).toISOString(), // Ensure ISO format
             status: 'open'
           }
         ]);
 
-      if (error) throw error;
+      if (error) {
+        // This will tell you EXACTLY what is wrong in the console
+        console.error("SUPABASE ERROR:", error.code, error.message, error.details);
+        throw error;
+      }
 
-      // 3. Success UI Feedback
-      alert("CHALLENGE BROADCASTED TO LOBBY");
+      alert("CHALLENGE LIVE IN LOBBY");
       onClose();
       
     } catch (error) {
-      console.error("Deployment Error:", error.message);
-      alert("FIELD ERROR: Deployment failed. Check system logs.");
+      alert(`DEPLOYMENT FAILED: ${error.message || "Check Console"}`);
     } finally {
       setLoading(false);
     }
@@ -122,7 +132,7 @@ function CreateChallenge({ isOpen, onClose }) {
             ))}
           </div>
 
-          {/* SOLO / GROUP TOGGLE */}
+          {/* MODE TOGGLE */}
           <div className="flex gap-3">
             {["Solo", "Group"].map((m) => (
               <button
@@ -140,21 +150,19 @@ function CreateChallenge({ isOpen, onClose }) {
             ))}
           </div>
 
-          {/* TEAM SIZE (GROUP ONLY) */}
+          {/* TEAM SIZE */}
           {formData.mode === "Group" && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}>
-              <p className="text-[9px] text-slate-500 mb-3 uppercase tracking-[0.2em]">
-                Squad Configuration
-              </p>
+              <p className="text-[9px] text-slate-500 mb-3 uppercase tracking-[0.2em]">Squad Size</p>
               <div className="flex flex-wrap gap-2">
-                {[3, 4, 5, 6, 7].map((size) => (
+                {[2, 3, 4, 5, 6].map((size) => (
                   <button
                     key={size}
                     disabled={loading}
                     onClick={() => setFormData({ ...formData, teamSize: size })}
                     className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
                       formData.teamSize === size
-                        ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+                        ? "bg-blue-500 text-white shadow-lg"
                         : "bg-white/5 text-slate-500 border border-white/5"
                     }`}
                   >
@@ -166,76 +174,54 @@ function CreateChallenge({ isOpen, onClose }) {
           )}
 
           {/* STAKES */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-black/20 p-6 rounded-3xl border border-green-500/10 space-y-4"
-          >
+          <div className="bg-black/20 p-6 rounded-3xl border border-green-500/10 space-y-4">
             <div className="flex items-center gap-2">
-              <Gamepad2 size={13} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+              <Gamepad2 size={13} className="text-emerald-400" />
               <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Stakes (G-Points)</p>
             </div>
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-              {[20, 30, 40, 50].map((pts) => (
+              {[20, 50, 100].map((pts) => (
                 <button
                   key={pts}
                   disabled={loading}
                   onClick={() => setFormData({ ...formData, stakes: pts })}
                   className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
                     formData.stakes === pts
-                      ? "bg-green-500 text-black border-green-400 scale-105 shadow-xl"
+                      ? "bg-green-500 text-black border-green-400 scale-105"
                       : "bg-white/5 text-slate-500 border-white/5 opacity-50"
                   }`}
                 >
-                  <Gamepad2 size={13} className={formData.stakes === pts ? "text-black drop-shadow-none" : "text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]"} />
                   <span className="text-xs">{pts}</span>
                 </button>
               ))}
-
-              <div
-                className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${
-                  ![20, 30, 40, 50].includes(formData.stakes)
-                    ? "bg-green-500/10 border-green-500"
-                    : "bg-white/5 border-white/5"
-                }`}
-              >
+              <div className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${![20, 50, 100].includes(formData.stakes) ? "bg-green-500/10 border-green-500" : "bg-white/5 border-white/5"}`}>
                 <Edit3 size={14} className="text-green-500 mr-2 shrink-0" />
                 <input
                   type="number"
                   disabled={loading}
                   placeholder="Custom"
-                  className="bg-transparent w-full outline-none text-xs font-black text-white placeholder:text-slate-600"
-                  value={![20, 30, 40, 50].includes(formData.stakes) ? formData.stakes : ""}
+                  className="bg-transparent w-full outline-none text-xs font-black text-white"
+                  value={![20, 50, 100].includes(formData.stakes) ? formData.stakes : ""}
                   onChange={(e) => handleCustomStakes(e.target.value)}
                 />
               </div>
             </div>
+            <p className="text-[10px] text-emerald-400/80 text-right">Pot Pool: {winnerAmount} G-PTS</p>
+          </div>
 
-            <div className="flex justify-between items-center pt-2">
-              <span className="text-[9px] text-slate-500 uppercase italic">Pot Pool</span>
-              <div className="flex items-center gap-1.5">
-                <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                <p className="text-emerald-100 text-sm font-black italic tracking-tighter">
-                  Winner Takes: <span className="text-emerald-400">{winnerAmount}</span> G-PTS
-                </p>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* VENUE & DATE */}
-          <div className="space-y-3 font-sans non-italic font-medium">
-            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
+          {/* INPUTS */}
+          <div className="space-y-3">
+            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5">
               <MapPin size={18} className="text-emerald-500" />
               <input
                 disabled={loading}
-                placeholder="Select Venue"
+                placeholder="Venue Name"
                 className="bg-transparent outline-none flex-1 text-sm text-white font-bold"
                 value={formData.venue}
                 onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
               />
             </div>
-
-            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
+            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5">
               <Calendar size={18} className="text-emerald-500" />
               <input
                 disabled={loading}
@@ -247,20 +233,13 @@ function CreateChallenge({ isOpen, onClose }) {
             </div>
           </div>
 
-          {/* LAUNCH BUTTON */}
+          {/* LAUNCH */}
           <button
             onClick={handleDeploy}
-            disabled={loading || !formData.venue || !formData.date}
-            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+            disabled={loading}
+            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            {loading ? (
-              <>
-                <Loader2 className="animate-spin" size={18} />
-                Deploying...
-              </>
-            ) : (
-              "Deploy Challenge"
-            )}
+            {loading ? <Loader2 className="animate-spin" size={18} /> : "Deploy Challenge"}
           </button>
         </motion.div>
       </div>
