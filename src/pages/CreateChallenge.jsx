@@ -5,10 +5,13 @@ import {
   Gamepad2,
   MapPin,
   Calendar,
-  Edit3
+  Edit3,
+  Loader2
 } from "lucide-react";
+import { supabase } from "../lib/supabase"; // Ensure this path is correct for your project
 
 function CreateChallenge({ isOpen, onClose }) {
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     sport: "Football",
     mode: "Solo",
@@ -22,10 +25,52 @@ function CreateChallenge({ isOpen, onClose }) {
 
   const winnerAmount = formData.stakes * 2;
 
-  // Handles manual point entry
   const handleCustomStakes = (value) => {
     const numValue = parseInt(value) || 0;
     setFormData({ ...formData, stakes: numValue });
+  };
+
+  // ─── LIVE DEPLOYMENT LOGIC ──────────────────────────────────────────────────
+  const handleDeploy = async () => {
+    try {
+      setLoading(true);
+
+      // 1. Get Current Authenticated User
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        alert("Authentication required to deploy challenges.");
+        return;
+      }
+
+      // 2. Insert into lobby_appeals (or challenges) table
+      const { error } = await supabase
+        .from('lobby_appeals') 
+        .insert([
+          {
+            host_id: user.id,
+            sport: formData.sport,
+            mode: formData.mode,
+            needed_players: formData.mode === "Solo" ? 1 : formData.teamSize,
+            stakes: formData.stakes,
+            venue_name: formData.venue, // Matches your input field
+            scheduled_at: formData.date,
+            status: 'open'
+          }
+        ]);
+
+      if (error) throw error;
+
+      // 3. Success UI Feedback
+      alert("CHALLENGE BROADCASTED TO LOBBY");
+      onClose();
+      
+    } catch (error) {
+      console.error("Deployment Error:", error.message);
+      alert("FIELD ERROR: Deployment failed. Check system logs.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,7 +81,7 @@ function CreateChallenge({ isOpen, onClose }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={!loading ? onClose : null}
         />
 
         <motion.div
@@ -52,7 +97,8 @@ function CreateChallenge({ isOpen, onClose }) {
             </h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              disabled={loading}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
             >
               <X size={20} />
             </button>
@@ -63,6 +109,7 @@ function CreateChallenge({ isOpen, onClose }) {
             {["Football", "Cricket", "Badminton", "Pickleball"].map((s) => (
               <button
                 key={s}
+                disabled={loading}
                 onClick={() => setFormData({ ...formData, sport: s })}
                 className={`py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
                   formData.sport === s
@@ -80,6 +127,7 @@ function CreateChallenge({ isOpen, onClose }) {
             {["Solo", "Group"].map((m) => (
               <button
                 key={m}
+                disabled={loading}
                 onClick={() => setFormData({ ...formData, mode: m })}
                 className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
                   formData.mode === m
@@ -102,6 +150,7 @@ function CreateChallenge({ isOpen, onClose }) {
                 {[3, 4, 5, 6, 7].map((size) => (
                   <button
                     key={size}
+                    disabled={loading}
                     onClick={() => setFormData({ ...formData, teamSize: size })}
                     className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
                       formData.teamSize === size
@@ -116,7 +165,7 @@ function CreateChallenge({ isOpen, onClose }) {
             </motion.div>
           )}
 
-          {/* STAKES — always shown (competitive only) */}
+          {/* STAKES */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -130,6 +179,7 @@ function CreateChallenge({ isOpen, onClose }) {
               {[20, 30, 40, 50].map((pts) => (
                 <button
                   key={pts}
+                  disabled={loading}
                   onClick={() => setFormData({ ...formData, stakes: pts })}
                   className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
                     formData.stakes === pts
@@ -142,7 +192,6 @@ function CreateChallenge({ isOpen, onClose }) {
                 </button>
               ))}
 
-              {/* CUSTOM POINT FIELD */}
               <div
                 className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${
                   ![20, 30, 40, 50].includes(formData.stakes)
@@ -153,6 +202,7 @@ function CreateChallenge({ isOpen, onClose }) {
                 <Edit3 size={14} className="text-green-500 mr-2 shrink-0" />
                 <input
                   type="number"
+                  disabled={loading}
                   placeholder="Custom"
                   className="bg-transparent w-full outline-none text-xs font-black text-white placeholder:text-slate-600"
                   value={![20, 30, 40, 50].includes(formData.stakes) ? formData.stakes : ""}
@@ -177,6 +227,7 @@ function CreateChallenge({ isOpen, onClose }) {
             <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
               <MapPin size={18} className="text-emerald-500" />
               <input
+                disabled={loading}
                 placeholder="Select Venue"
                 className="bg-transparent outline-none flex-1 text-sm text-white font-bold"
                 value={formData.venue}
@@ -187,6 +238,7 @@ function CreateChallenge({ isOpen, onClose }) {
             <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
               <Calendar size={18} className="text-emerald-500" />
               <input
+                disabled={loading}
                 type="datetime-local"
                 className="bg-transparent outline-none flex-1 text-sm text-white font-bold [color-scheme:dark]"
                 value={formData.date}
@@ -197,13 +249,18 @@ function CreateChallenge({ isOpen, onClose }) {
 
           {/* LAUNCH BUTTON */}
           <button
-            onClick={() => {
-              console.log("Challenge Deployed:", formData);
-              onClose();
-            }}
-            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+            onClick={handleDeploy}
+            disabled={loading || !formData.venue || !formData.date}
+            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
           >
-            Deploy Challenge
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin" size={18} />
+                Deploying...
+              </>
+            ) : (
+              "Deploy Challenge"
+            )}
           </button>
         </motion.div>
       </div>
