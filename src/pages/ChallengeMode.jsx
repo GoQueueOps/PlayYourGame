@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
-  Trophy, Swords, Zap, 
+  Trophy, Swords, Gamepad2,
   ChevronLeft, Medal, Star, Target, Users, User, Plus, 
   ChevronRight, Loader2 
 } from "lucide-react"; 
@@ -61,7 +61,11 @@ function ArenaLegendsSection() {
                   {item.name} {item.rank === 1 && <Star size={16} className="text-yellow-500 fill-yellow-500" />}
                 </h4>
                 <div className="flex items-center gap-4 mt-1">
-                  <span className="text-[10px] text-emerald-500"><Zap size={10} className="inline mr-1" />{item.score} Z-PTS</span>
+                  {/* G-Points with Gamepad2 icon to match Explore style */}
+                  <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                    <Gamepad2 size={10} className="drop-shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
+                    {item.score} G-PTS
+                  </span>
                   <span className="text-[9px] text-slate-500"><Target size={10} className="inline mr-1" />{item.matches} Matches</span>
                 </div>
               </div>
@@ -111,66 +115,147 @@ function ChallengeMode() {
     fetchChallenges();
   }, []);
 
-  const formatMatchTime = (dateStr) => {
-    return new Date(dateStr).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // ── Functional update so we never capture a stale `challenges` closure ──
+  const handleChallengeCreated = (newMatch) => {
+    setChallenges((prev) => [newMatch, ...prev]);
   };
 
-  const filteredChallenges = selectedSlab === "All" 
-    ? challenges 
-    : challenges.filter(c => c.entry_points === selectedSlab);
+  const formatMatchTime = (dateStr) => {
+    return new Date(dateStr).toLocaleString('en-IN', {
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const filteredChallenges = selectedSlab === "All"
+    ? challenges
+    : challenges.filter((c) => c.entry_points === selectedSlab);
 
   return (
     <div className="min-h-screen bg-[#020617] text-white font-sans p-6 lg:p-12 relative overflow-x-hidden italic font-black uppercase">
       <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-emerald-500/5 blur-[150px] rounded-full pointer-events-none" />
 
-      <CreateChallenge 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onChallengeCreated={(newMatch) => setChallenges([newMatch, ...challenges])}
+      <CreateChallenge
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onChallengeCreated={handleChallengeCreated}   // ← wired up correctly
       />
 
       <header className="max-w-6xl mx-auto mb-12 relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-6 text-left w-full">
-          <button onClick={() => navigate(-1)} className="p-3 bg-white/5 border border-white/10 rounded-2xl active:scale-90 transition-all text-white"><ChevronLeft size={24} /></button>
+          <button onClick={() => navigate(-1)} className="p-3 bg-white/5 border border-white/10 rounded-2xl active:scale-90 transition-all text-white">
+            <ChevronLeft size={24} />
+          </button>
           <div>
-            <div className="flex items-center gap-2 mb-1 text-orange-500"><Swords size={16}/><span className="text-[10px] tracking-[0.4em]">Lobby & Duels</span></div>
+            <div className="flex items-center gap-2 mb-1 text-orange-500">
+              <Swords size={16} />
+              <span className="text-[10px] tracking-[0.4em]">Lobby & Duels</span>
+            </div>
             <h1 className="text-5xl italic tracking-tighter leading-none">Challenge Mode</h1>
           </div>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="bg-emerald-500 text-black px-10 py-5 rounded-[2.5rem] text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center gap-3 shrink-0"><Plus size={18} strokeWidth={3} /> Create Challenge</button>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="bg-emerald-500 text-black px-10 py-5 rounded-[2.5rem] text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center gap-3 shrink-0"
+        >
+          <Plus size={18} strokeWidth={3} /> Create Challenge
+        </button>
       </header>
 
+      {/* SLAB FILTERS */}
       <div className="max-w-6xl mx-auto mb-10 flex gap-4 overflow-x-auto no-scrollbar pb-2">
         {["All", 20, 50, 100].map((slab) => (
-          <button key={slab} onClick={() => setSelectedSlab(slab)} className={`px-8 py-4 rounded-2xl border text-[10px] tracking-widest transition-all ${selectedSlab === slab ? "bg-white text-black" : "bg-white/5 text-slate-500 border-white/10"}`}>{slab === "All" ? "All Stakes" : `${slab} G-PTS`}</button>
+          <button
+            key={slab}
+            onClick={() => setSelectedSlab(slab)}
+            className={`px-8 py-4 rounded-2xl border text-[10px] tracking-widest transition-all flex items-center gap-2 ${
+              selectedSlab === slab
+                ? "bg-white text-black"
+                : "bg-white/5 text-slate-500 border-white/10"
+            }`}
+          >
+            {slab === "All" ? (
+              "All Stakes"
+            ) : (
+              <>
+                <Gamepad2
+                  size={11}
+                  className={selectedSlab === slab ? "text-black" : "text-emerald-400"}
+                />
+                {slab} G-PTS
+              </>
+            )}
+          </button>
         ))}
       </div>
 
+      {/* CHALLENGE CARDS */}
       <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
         {loading ? (
-          <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500"><Loader2 className="animate-spin text-emerald-500" size={40} /><p className="text-[10px] tracking-widest">Syncing Grid...</p></div>
+          <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500">
+            <Loader2 className="animate-spin text-emerald-500" size={40} />
+            <p className="text-[10px] tracking-widest">Syncing Grid...</p>
+          </div>
         ) : filteredChallenges.length === 0 ? (
-          <div className="col-span-full py-20 bg-white/5 rounded-[3rem] border border-dashed border-white/10 text-center"><p className="text-slate-500 tracking-widest">No active nodes.</p></div>
+          <div className="col-span-full py-20 bg-white/5 rounded-[3rem] border border-dashed border-white/10 text-center">
+            <p className="text-slate-500 tracking-widest">No active nodes.</p>
+          </div>
         ) : (
           <AnimatePresence mode="popLayout">
             {filteredChallenges.map((match) => (
-              <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] p-8 group hover:border-emerald-500/50 transition-all text-left">
+              <motion.div
+                key={match.id}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] p-8 group hover:border-emerald-500/50 transition-all text-left"
+              >
                 <div className="flex justify-between items-start mb-10">
                   <div className="space-y-1">
-                    <span className="px-3 py-1 rounded-full text-[9px] border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">{match.sport}</span>
-                    <h3 className="text-3xl mt-2 text-white">{match.profiles?.full_name || "Athlete"}</h3>
-                    <p className="text-[10px] text-slate-500">{match.mode} • Aura: {match.profiles?.aura_score || 0}</p>
+                    {/* sport now populated from DB */}
+                    <span className="px-3 py-1 rounded-full text-[9px] border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                      {match.sport || "Sport"}
+                    </span>
+                    <h3 className="text-3xl mt-2 text-white">
+                      {match.profiles?.full_name || "Athlete"}
+                    </h3>
+                    <p className="text-[10px] text-slate-500">
+                      {match.mode || "Solo"} • Aura: {match.profiles?.aura_score || 0}
+                    </p>
                   </div>
+
+                  {/* G-Points badge with Gamepad2 icon */}
                   <div className="text-right">
-                    <div className="flex items-center gap-2 bg-emerald-500 text-black px-4 py-2 rounded-xl text-sm shadow-xl"><Zap size={14} fill="currentColor" /> {match.entry_points}</div>
-                    <p className="text-[9px] text-emerald-500 mt-2">Pot: {match.entry_points * 2}</p>
+                    <div className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-100 px-4 py-2 rounded-xl text-sm shadow-xl">
+                      <Gamepad2
+                        size={14}
+                        className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]"
+                      />
+                      <span className="font-black">{match.entry_points}</span>
+                    </div>
+                    <p className="text-[9px] text-emerald-500 mt-2 flex items-center justify-end gap-1">
+                      <Gamepad2 size={9} className="text-emerald-400" />
+                      Pot: {match.entry_points * 2} G-PTS
+                    </p>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4 mb-8">
-                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5"><p className="text-[8px] text-slate-500 mb-1">Venue</p><p className="text-[11px] truncate text-white">{match.venue_name || "TBD"}</p></div>
-                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5"><p className="text-[8px] text-slate-500 mb-1">Kickoff</p><p className="text-[11px] truncate text-white">{formatMatchTime(match.match_time)}</p></div>
+                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[8px] text-slate-500 mb-1">Venue</p>
+                    {/* venue_name now populated from DB */}
+                    <p className="text-[11px] truncate text-white">{match.venue_name || "TBD"}</p>
+                  </div>
+                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[8px] text-slate-500 mb-1">Kickoff</p>
+                    <p className="text-[11px] truncate text-white">{formatMatchTime(match.match_time)}</p>
+                  </div>
                 </div>
-                <button className="w-full bg-emerald-500 text-black py-5 rounded-2xl text-xs tracking-[0.2em] hover:bg-white transition-all active:scale-95">Accept Challenge Back »</button>
+
+                <button className="w-full bg-emerald-500 text-black py-5 rounded-2xl text-xs tracking-[0.2em] hover:bg-white transition-all active:scale-95">
+                  Accept Challenge »
+                </button>
               </motion.div>
             ))}
           </AnimatePresence>

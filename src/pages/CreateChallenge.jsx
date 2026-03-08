@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
-function CreateChallenge({ isOpen, onClose }) {
+function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     sport: "Football",
@@ -30,9 +30,8 @@ function CreateChallenge({ isOpen, onClose }) {
     setFormData({ ...formData, stakes: numValue });
   };
 
-  // ─── LIVE DEPLOYMENT LOGIC ──────────────────────────────────────────────────
+  // ─── LIVE DEPLOYMENT LOGIC ────────────────────────────────────────────────
   const handleDeploy = async () => {
-    // Basic Validation
     if (!formData.venue || !formData.date) {
       alert("PLEASE FILL ALL FIELDS");
       return;
@@ -44,36 +43,41 @@ function CreateChallenge({ isOpen, onClose }) {
       // 1. Get Current User Session
       const { data: authData, error: authError } = await supabase.auth.getSession();
       const user = authData?.session?.user;
-      
+
       if (authError || !user) {
         alert("SESSION EXPIRED: Please login again.");
         return;
       }
 
-      // 2. Insert into Supabase
-      // Note: Ensure your table name is 'lobby_appeals' 
-      const { error } = await supabase
-  .from("matches")
-  .insert([
-    {
-      created_by: user.id,
-      match_type: "challenge",
-      status: "open",
-      match_time: new Date(formData.date).toISOString(),
-      max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
-      entry_points: formData.stakes
-    }
-  ]);
+      // 2. Insert into Supabase — all fields that ChallengeMode reads
+      const { data, error } = await supabase
+        .from("matches")
+        .insert([
+          {
+            created_by: user.id,
+            match_type: "challenge",
+            status: "open",
+            sport: formData.sport,                             // ← was missing
+            mode: formData.mode,                               // ← was missing
+            venue_name: formData.venue,                        // ← was missing (key matches ChallengeMode)
+            match_time: new Date(formData.date).toISOString(),
+            max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
+            entry_points: formData.stakes,
+          }
+        ])
+        .select(`*, profiles:created_by (full_name, aura_score)`)  // return full row for instant card render
+        .single();
 
       if (error) {
-        // This will tell you EXACTLY what is wrong in the console
         console.error("SUPABASE ERROR:", error.code, error.message, error.details);
         throw error;
       }
 
-      alert("CHALLENGE LIVE IN LOBBY");
+      // 3. Bubble new row to ChallengeMode so it prepends without refetching
+      if (onChallengeCreated) onChallengeCreated(data);
+
       onClose();
-      
+
     } catch (error) {
       alert(`DEPLOYMENT FAILED: ${error.message || "Check Console"}`);
     } finally {
@@ -172,9 +176,9 @@ function CreateChallenge({ isOpen, onClose }) {
           )}
 
           {/* STAKES */}
-          <div className="bg-black/20 p-6 rounded-3xl border border-green-500/10 space-y-4">
+          <div className="bg-black/20 p-6 rounded-3xl border border-emerald-500/10 space-y-4">
             <div className="flex items-center gap-2">
-              <Gamepad2 size={13} className="text-emerald-400" />
+              <Gamepad2 size={13} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
               <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Stakes (G-Points)</p>
             </div>
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
@@ -185,31 +189,56 @@ function CreateChallenge({ isOpen, onClose }) {
                   onClick={() => setFormData({ ...formData, stakes: pts })}
                   className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
                     formData.stakes === pts
-                      ? "bg-green-500 text-black border-green-400 scale-105"
+                      ? "bg-emerald-500 text-black border-emerald-400 scale-105 shadow-xl shadow-emerald-500/20"
                       : "bg-white/5 text-slate-500 border-white/5 opacity-50"
                   }`}
                 >
-                  <span className="text-xs">{pts}</span>
+                  <Gamepad2
+                    size={13}
+                    className={
+                      formData.stakes === pts
+                        ? "text-black"
+                        : "text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+                    }
+                  />
+                  <span className="text-xs mt-0.5">{pts}</span>
                 </button>
               ))}
-              <div className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${![20, 50, 100].includes(formData.stakes) ? "bg-green-500/10 border-green-500" : "bg-white/5 border-white/5"}`}>
-                <Edit3 size={14} className="text-green-500 mr-2 shrink-0" />
+
+              {/* CUSTOM POINT FIELD */}
+              <div
+                className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${
+                  ![20, 50, 100].includes(formData.stakes)
+                    ? "bg-emerald-500/10 border-emerald-500"
+                    : "bg-white/5 border-white/5"
+                }`}
+              >
+                <Edit3 size={14} className="text-emerald-400 mr-2 shrink-0" />
                 <input
                   type="number"
                   disabled={loading}
                   placeholder="Custom"
-                  className="bg-transparent w-full outline-none text-xs font-black text-white"
+                  className="bg-transparent w-full outline-none text-xs font-black text-white placeholder:text-slate-600"
                   value={![20, 50, 100].includes(formData.stakes) ? formData.stakes : ""}
                   onChange={(e) => handleCustomStakes(e.target.value)}
                 />
               </div>
             </div>
-            <p className="text-[10px] text-emerald-400/80 text-right">Pot Pool: {winnerAmount} G-PTS</p>
+
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-[9px] text-slate-500 uppercase italic">Pot Pool</span>
+              <div className="flex items-center gap-1.5">
+                <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                <p className="text-emerald-100 text-sm font-black italic tracking-tighter">
+                  Winner Takes: <span className="text-emerald-400">{winnerAmount}</span> G-PTS
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* INPUTS */}
-          <div className="space-y-3">
-            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5">
+          <div className="space-y-3 font-sans font-medium not-italic">
+            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
               <MapPin size={18} className="text-emerald-500" />
               <input
                 disabled={loading}
@@ -219,7 +248,7 @@ function CreateChallenge({ isOpen, onClose }) {
                 onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
               />
             </div>
-            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5">
+            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
               <Calendar size={18} className="text-emerald-500" />
               <input
                 disabled={loading}
@@ -235,7 +264,7 @@ function CreateChallenge({ isOpen, onClose }) {
           <button
             onClick={handleDeploy}
             disabled={loading}
-            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="animate-spin" size={18} /> : "Deploy Challenge"}
           </button>
