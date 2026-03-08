@@ -52,19 +52,19 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
       // We only include columns that exist in your Supabase schema.
       // 'mode', 'sport', and 'venue_name' are REMOVED from the insert object.
       const { data, error } = await supabase
-        .from("matches")
-        .insert([
-          {
-            created_by: user.id,
-            match_type: "challenge",
-            status: "open",
-            match_time: new Date(formData.date).toISOString(),
-            max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
-            entry_points: formData.stakes,
-          }
-        ])
-        .select(`*, profiles:created_by (name, aura_points)`)
-        .single();
+  .from("matches")
+  .insert([
+    {
+      created_by: user.id,
+      match_type: "challenge",
+      status: "open",
+      match_time: new Date(formData.date).toISOString(),
+      max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
+      entry_points: formData.stakes
+    }
+  ])
+  .select(`*, profiles:created_by (name, aura_points)`)
+  .single();
 
       if (error) {
         console.error("CRITICAL DB ERROR:", error.message);
