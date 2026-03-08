@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
-  Zap,
+  Gamepad2,
   MapPin,
   Calendar,
   Edit3
@@ -122,9 +122,10 @@ function CreateChallenge({ isOpen, onClose }) {
             animate={{ opacity: 1, y: 0 }}
             className="bg-black/20 p-6 rounded-3xl border border-yellow-500/10 space-y-4"
           >
-            <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">
-              Stakes (G-Points)
-            </p>
+            <div className="flex items-center gap-2">
+              <Gamepad2 size={13} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+              <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Stakes (G-Points)</p>
+            </div>
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
               {[20, 30, 40, 50].map((pts) => (
                 <button
@@ -136,7 +137,7 @@ function CreateChallenge({ isOpen, onClose }) {
                       : "bg-white/5 text-slate-500 border-white/5 opacity-50"
                   }`}
                 >
-                  <Zap size={12} fill={formData.stakes === pts ? "black" : "none"} />
+                  <Gamepad2 size={13} className={formData.stakes === pts ? "text-black drop-shadow-none" : "text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]"} />
                   <span className="text-xs">{pts}</span>
                 </button>
               ))}
@@ -162,9 +163,12 @@ function CreateChallenge({ isOpen, onClose }) {
 
             <div className="flex justify-between items-center pt-2">
               <span className="text-[9px] text-slate-500 uppercase italic">Pot Pool</span>
-              <p className="text-yellow-400 text-sm font-black italic tracking-tighter">
-                Winner Takes: {winnerAmount} G-PTS
-              </p>
+              <div className="flex items-center gap-1.5">
+                <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                <p className="text-emerald-100 text-sm font-black italic tracking-tighter">
+                  Winner Takes: <span className="text-emerald-400">{winnerAmount}</span> G-PTS
+                </p>
+              </div>
             </div>
           </motion.div>
 
