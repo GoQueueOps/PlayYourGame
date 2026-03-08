@@ -1,250 +1,107 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  X,
-  Gamepad2,
-  MapPin,
-  Calendar,
-  Edit3,
-  Loader2
-} from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
+
   const [loading, setLoading] = useState(false);
+
   const [formData, setFormData] = useState({
-    sport: "Football",
     mode: "Solo",
     teamSize: 3,
     stakes: 20,
-    venue: "",
     date: ""
   });
 
   if (!isOpen) return null;
 
-  const winnerAmount = formData.stakes * 2;
-
-  const handleCustomStakes = (value) => {
-    const numValue = parseInt(value) || 0;
-    setFormData({ ...formData, stakes: numValue });
-  };
-
-  // ─── LIVE DEPLOYMENT LOGIC ────────────────────────────────────────────────
   const handleDeploy = async () => {
-    if (!formData.venue || !formData.date) {
-      alert("PLEASE FILL ALL FIELDS");
-      return;
-    }
 
     try {
+
       setLoading(true);
 
-      const { data: authData, error: authError } = await supabase.auth.getSession();
+      const { data: authData } = await supabase.auth.getSession();
       const user = authData?.session?.user;
 
-      if (authError || !user) {
-        alert("SESSION EXPIRED: Please login again.");
+      if (!user) {
+        alert("Login required");
         return;
       }
 
-      // ─── DATABASE ALIGNED INSERT ───
-      // We only include columns that exist in your Supabase schema.
-      // 'mode', 'sport', and 'venue_name' are REMOVED from the insert object.
+      // FULL INSERT QUERY
       const { data, error } = await supabase
-  .from("matches")
-  .insert([
-    {
-      created_by: user.id,
-      match_type: "challenge",
-      status: "open",
-      match_time: new Date(formData.date).toISOString(),
-      max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
-      entry_points: formData.stakes
-    }
-  ])
-  .select(`*, profiles:created_by (name, aura_points)`)
-  .single();
+        .from("matches")
+        .insert([
+          {
+            created_by: user.id,
+            match_type: "challenge",
+            status: "open",
+            match_time: new Date(formData.date).toISOString(),
+            max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
+            entry_points: formData.stakes
+          }
+        ])
+        .select(`
+          id,
+          created_by,
+          match_type,
+          status,
+          match_time,
+          max_players,
+          entry_points,
+          profiles:created_by (
+            name
+          )
+        `)
+        .single();
 
-      if (error) {
-        console.error("CRITICAL DB ERROR:", error.message);
-        throw error;
-      }
+      if (error) throw error;
 
       if (onChallengeCreated) onChallengeCreated(data);
 
-      alert("CHALLENGE LIVE IN LOBBY");
       onClose();
 
-    } catch (error) {
-      // This catches the 'column not found' error if anything extra was left in
-      alert(`DEPLOYMENT FAILED: ${error.message}`);
+    } catch (err) {
+
+      alert(err.message);
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-          onClick={!loading ? onClose : null}
-        />
 
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="relative w-full max-w-xl bg-[#0b0f1a] border border-white/10 rounded-[2.5rem] p-8 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh] no-scrollbar italic font-black uppercase"
-        >
-          {/* HEADER */}
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl uppercase tracking-tighter italic text-white">
-              Launch <span className="text-emerald-500">Challenge</span>
-            </h2>
-            <button
-              onClick={onClose}
-              disabled={loading}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
-            >
-              <X size={20} className="text-white" />
-            </button>
-          </div>
+      <div className="fixed inset-0 flex items-center justify-center">
 
-          {/* SPORT SELECTION */}
-          <div className="grid grid-cols-2 gap-3">
-            {["Football", "Cricket", "Badminton", "Pickleball"].map((s) => (
-              <button
-                key={s}
-                disabled={loading}
-                onClick={() => setFormData({ ...formData, sport: s })}
-                className={`py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border ${
-                  formData.sport === s
-                    ? "bg-white text-black border-white shadow-lg"
-                    : "bg-white/5 text-slate-500 border-white/5 hover:border-white/20"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        <motion.div className="bg-[#0b0f1a] p-8 rounded-2xl">
 
-          {/* MODE TOGGLE */}
-          <div className="flex gap-3">
-            {["Solo", "Group"].map((m) => (
-              <button
-                key={m}
-                disabled={loading}
-                onClick={() => setFormData({ ...formData, mode: m })}
-                className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border ${
-                  formData.mode === m
-                    ? "bg-emerald-500 text-black border-emerald-400 shadow-emerald-500/20 shadow-lg"
-                    : "bg-white/5 text-slate-500 border-white/5"
-                }`}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-
-          {/* TEAM SIZE */}
-          {formData.mode === "Group" && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}>
-              <p className="text-[9px] text-slate-500 mb-3 uppercase tracking-[0.2em]">Squad Configuration</p>
-              <div className="flex flex-wrap gap-2">
-                {[2, 3, 4, 5, 6].map((size) => (
-                  <button
-                    key={size}
-                    disabled={loading}
-                    onClick={() => setFormData({ ...formData, teamSize: size })}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all border ${
-                      formData.teamSize === size
-                        ? "bg-blue-500 text-white border-blue-400 shadow-lg"
-                        : "bg-white/5 text-slate-500 border-white/5"
-                    }`}
-                  >
-                    {size}v{size}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* STAKES */}
-          <div className="bg-black/20 p-6 rounded-3xl border border-emerald-500/10 space-y-4">
-            <div className="flex items-center gap-2">
-              <Gamepad2 size={13} className="text-emerald-400" />
-              <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Stakes (G-Points)</p>
-            </div>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-              {[20, 50, 100].map((pts) => (
-                <button
-                  key={pts}
-                  disabled={loading}
-                  onClick={() => setFormData({ ...formData, stakes: pts })}
-                  className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
-                    formData.stakes === pts
-                      ? "bg-emerald-500 text-black border-emerald-400 scale-105 shadow-xl"
-                      : "bg-white/5 text-slate-500 border-white/5 opacity-50"
-                  }`}
-                >
-                  <span className="text-xs">{pts}</span>
-                </button>
-              ))}
-
-              <div className={`relative min-w-[120px] h-[60px] rounded-2xl border flex items-center px-4 ${![20, 50, 100].includes(formData.stakes) ? "bg-emerald-500/10 border-emerald-500" : "bg-white/5 border-white/5"}`}>
-                <Edit3 size={14} className="text-emerald-400 mr-2 shrink-0" />
-                <input
-                  type="number"
-                  disabled={loading}
-                  placeholder="Custom"
-                  className="bg-transparent w-full outline-none text-xs font-black text-white"
-                  value={![20, 50, 100].includes(formData.stakes) ? formData.stakes : ""}
-                  onChange={(e) => handleCustomStakes(e.target.value)}
-                />
-              </div>
-            </div>
-            <p className="text-[10px] text-emerald-400/80 text-right uppercase">Prize Pool: {winnerAmount} G-PTS</p>
-          </div>
-
-          {/* INPUTS */}
-          <div className="space-y-3 font-sans font-medium not-italic uppercase">
-            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
-              <MapPin size={18} className="text-emerald-500" />
-              <input
-                disabled={loading}
-                placeholder="VENUE NAME"
-                className="bg-transparent outline-none flex-1 text-sm text-white font-bold"
-                value={formData.venue}
-                onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
-              />
-            </div>
-            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
-              <Calendar size={18} className="text-emerald-500" />
-              <input
-                disabled={loading}
-                type="datetime-local"
-                className="bg-transparent outline-none flex-1 text-sm text-white font-bold [color-scheme:dark]"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* LAUNCH */}
-          <button
-            onClick={handleDeploy}
-            disabled={loading}
-            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-          >
-            {loading ? <Loader2 className="animate-spin" size={18} /> : "Deploy Challenge"}
+          <button onClick={onClose}>
+            <X />
           </button>
+
+          <input
+            type="datetime-local"
+            value={formData.date}
+            onChange={(e) =>
+              setFormData({ ...formData, date: e.target.value })
+            }
+          />
+
+          <button onClick={handleDeploy}>
+            {loading ? <Loader2 className="animate-spin" /> : "Deploy Challenge"}
+          </button>
+
         </motion.div>
+
       </div>
+
     </AnimatePresence>
   );
 }
