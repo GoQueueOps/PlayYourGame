@@ -12,7 +12,6 @@ import { supabase } from "../lib/supabase";
 // Parses "challenge_football_solo" → { sport: "Football", mode: "Solo" }
 function parseMatchType(matchType = "") {
   const parts = matchType.split("_");
-  // parts[0] = "challenge", parts[1] = sport, parts[2] = mode
   const sport = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : "Sport";
   const mode  = parts[2] ? parts[2].charAt(0).toUpperCase() + parts[2].slice(1) : "Solo";
   return { sport, mode };
@@ -113,7 +112,8 @@ function ChallengeMode() {
     try {
       setLoading(true);
 
-      // ── Exact columns only — no phantom fields, no join ──
+      // ── Join profiles for player name, arenas for venue name ──
+      // Using FK hint to avoid ambiguity (matches has two FKs to profiles/auth.users)
       const { data, error } = await supabase
         .from("matches")
         .select(`
@@ -124,16 +124,19 @@ function ChallengeMode() {
           match_time,
           created_at,
           max_players,
-          entry_points
+          entry_points,
+          arena_id,
+          player:profiles!matches_created_by_fkey ( name ),
+          arena:arenas!matches_arena_fkey ( name )
         `)
-        .like("match_type", "challenge_%")   // catches all challenge_sport_mode rows
+        .like("match_type", "challenge_%")
         .eq("status", "open")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       setChallenges(data || []);
     } catch (err) {
-      console.error(err.message);
+      console.error("Fetch error:", err.message);
     } finally {
       setLoading(false);
     }
@@ -142,6 +145,7 @@ function ChallengeMode() {
   useEffect(() => { fetchChallenges(); }, []);
 
   const handleChallengeCreated = (newMatch) => {
+    // newMatch already has player & arena attached by CreateChallenge
     setChallenges((prev) => [newMatch, ...prev]);
   };
 
@@ -224,6 +228,9 @@ function ChallengeMode() {
           <AnimatePresence mode="popLayout">
             {filteredChallenges.map((match) => {
               const { sport, mode } = parseMatchType(match.match_type);
+              const playerName = match.player?.name || "Unknown";
+              const arenaName  = match.arena?.name  || "TBD";
+
               return (
                 <motion.div
                   key={match.id}
@@ -238,7 +245,8 @@ function ChallengeMode() {
                       <span className="px-3 py-1 rounded-full text-[9px] border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
                         {sport}
                       </span>
-                      <h3 className="text-3xl mt-2 text-white">Athlete</h3>
+                      {/* ── Real player name from profiles join ── */}
+                      <h3 className="text-3xl mt-2 text-white">{playerName}</h3>
                       <p className="text-[10px] text-slate-500">{mode}</p>
                     </div>
 
@@ -257,8 +265,9 @@ function ChallengeMode() {
 
                   <div className="grid grid-cols-2 gap-4 mb-8">
                     <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                      <p className="text-[8px] text-slate-500 mb-1">Players</p>
-                      <p className="text-[11px] text-white">{match.max_players} Max</p>
+                      <p className="text-[8px] text-slate-500 mb-1">Venue</p>
+                      {/* ── Real arena name from arenas join ── */}
+                      <p className="text-[11px] truncate text-white">{arenaName}</p>
                     </div>
                     <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
                       <p className="text-[8px] text-slate-500 mb-1">Kickoff</p>
