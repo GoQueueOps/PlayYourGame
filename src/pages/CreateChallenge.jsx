@@ -40,7 +40,6 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
     try {
       setLoading(true);
 
-      // 1. Get Current User Session
       const { data: authData, error: authError } = await supabase.auth.getSession();
       const user = authData?.session?.user;
 
@@ -49,38 +48,37 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         return;
       }
 
-      // 2. Insert into Supabase matches table matching your schema
+      // ─── DATABASE ALIGNED INSERT ───
+      // We only include columns that exist in your Supabase schema.
+      // 'mode', 'sport', and 'venue_name' are REMOVED from the insert object.
       const { data, error } = await supabase
         .from("matches")
         .insert([
           {
-            created_by: user.id,              // uuid
-            match_type: "challenge",          // text
-            status: "open",                   // text
-            sport: formData.sport,            // text
-            mode: formData.mode,              // text
-            venue_name: formData.venue,        // text
-            match_time: new Date(formData.date).toISOString(), // timestamptz
-            max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2, // int4
-            entry_points: formData.stakes,    // int4
+            created_by: user.id,
+            match_type: "challenge",
+            status: "open",
+            match_time: new Date(formData.date).toISOString(),
+            max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
+            entry_points: formData.stakes,
           }
         ])
         .select(`*, profiles:created_by (full_name, aura_score)`)
         .single();
 
       if (error) {
-        console.error("SUPABASE ERROR:", error.code, error.message, error.details);
+        console.error("CRITICAL DB ERROR:", error.message);
         throw error;
       }
 
-      // 3. Update the UI list via callback
       if (onChallengeCreated) onChallengeCreated(data);
 
-      alert("CHALLENGE BROADCASTED TO LOBBY");
+      alert("CHALLENGE LIVE IN LOBBY");
       onClose();
 
     } catch (error) {
-      alert(`DEPLOYMENT FAILED: ${error.message || "Check Console"}`);
+      // This catches the 'column not found' error if anything extra was left in
+      alert(`DEPLOYMENT FAILED: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -105,7 +103,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         >
           {/* HEADER */}
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl uppercase tracking-tighter italic">
+            <h2 className="text-2xl uppercase tracking-tighter italic text-white">
               Launch <span className="text-emerald-500">Challenge</span>
             </h2>
             <button
@@ -113,7 +111,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
               disabled={loading}
               className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
             >
-              <X size={20} />
+              <X size={20} className="text-white" />
             </button>
           </div>
 
@@ -126,7 +124,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                 onClick={() => setFormData({ ...formData, sport: s })}
                 className={`py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border ${
                   formData.sport === s
-                    ? "bg-white text-black border-white shadow-lg shadow-white/10"
+                    ? "bg-white text-black border-white shadow-lg"
                     : "bg-white/5 text-slate-500 border-white/5 hover:border-white/20"
                 }`}
               >
@@ -156,7 +154,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           {/* TEAM SIZE */}
           {formData.mode === "Group" && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}>
-              <p className="text-[9px] text-slate-500 mb-3 uppercase tracking-[0.2em]">Squad Size</p>
+              <p className="text-[9px] text-slate-500 mb-3 uppercase tracking-[0.2em]">Squad Configuration</p>
               <div className="flex flex-wrap gap-2">
                 {[2, 3, 4, 5, 6].map((size) => (
                   <button
@@ -165,7 +163,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                     onClick={() => setFormData({ ...formData, teamSize: size })}
                     className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all border ${
                       formData.teamSize === size
-                        ? "bg-blue-500 text-white border-blue-400 shadow-lg shadow-blue-500/20"
+                        ? "bg-blue-500 text-white border-blue-400 shadow-lg"
                         : "bg-white/5 text-slate-500 border-white/5"
                     }`}
                   >
@@ -179,7 +177,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           {/* STAKES */}
           <div className="bg-black/20 p-6 rounded-3xl border border-emerald-500/10 space-y-4">
             <div className="flex items-center gap-2">
-              <Gamepad2 size={13} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+              <Gamepad2 size={13} className="text-emerald-400" />
               <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Stakes (G-Points)</p>
             </div>
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
@@ -190,7 +188,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                   onClick={() => setFormData({ ...formData, stakes: pts })}
                   className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
                     formData.stakes === pts
-                      ? "bg-emerald-500 text-black border-emerald-400 scale-105 shadow-xl shadow-emerald-500/20"
+                      ? "bg-emerald-500 text-black border-emerald-400 scale-105 shadow-xl"
                       : "bg-white/5 text-slate-500 border-white/5 opacity-50"
                   }`}
                 >
@@ -204,13 +202,13 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                   type="number"
                   disabled={loading}
                   placeholder="Custom"
-                  className="bg-transparent w-full outline-none text-xs font-black text-white placeholder:text-slate-600"
+                  className="bg-transparent w-full outline-none text-xs font-black text-white"
                   value={![20, 50, 100].includes(formData.stakes) ? formData.stakes : ""}
                   onChange={(e) => handleCustomStakes(e.target.value)}
                 />
               </div>
             </div>
-            <p className="text-[10px] text-emerald-400/80 text-right uppercase">Winner Pot: {winnerAmount} G-PTS</p>
+            <p className="text-[10px] text-emerald-400/80 text-right uppercase">Prize Pool: {winnerAmount} G-PTS</p>
           </div>
 
           {/* INPUTS */}
@@ -241,7 +239,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           <button
             onClick={handleDeploy}
             disabled={loading}
-            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {loading ? <Loader2 className="animate-spin" size={18} /> : "Deploy Challenge"}
           </button>
