@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Gamepad2, MapPin, Calendar, Edit3, Loader2 } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
@@ -18,11 +18,6 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
   if (!isOpen) return null;
 
   const winnerAmount = formData.stakes * 2;
-
-  const handleCustomStakes = (value) => {
-    const numValue = parseInt(value) || 0;
-    setFormData({ ...formData, stakes: numValue });
-  };
 
   const handleDeploy = async () => {
     if (!formData.venue || !formData.date) {
@@ -57,13 +52,12 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         .single();
 
       if (error) {
-        console.error(error);
+        console.error("SUPABASE ERROR:", error);
         throw error;
       }
 
       alert("CHALLENGE LIVE IN LOBBY");
 
-      // update parent component list
       if (onChallengeCreated) {
         onChallengeCreated(data);
       }
@@ -92,10 +86,13 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="relative w-full max-w-xl bg-[#0b0f1a] border border-white/10 rounded-[2.5rem] p-8 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh]"
+          className="relative w-full max-w-xl bg-[#0b0f1a] border border-white/10 rounded-[2rem] p-8 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh]"
         >
+
+          {/* HEADER */}
+
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl uppercase">
+            <h2 className="text-2xl uppercase font-bold">
               Launch <span className="text-emerald-500">Challenge</span>
             </h2>
 
@@ -109,13 +106,14 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           </div>
 
           {/* SPORT */}
+
           <div className="grid grid-cols-2 gap-3">
             {["Football", "Cricket", "Badminton", "Pickleball"].map((s) => (
               <button
                 key={s}
                 disabled={loading}
                 onClick={() => setFormData({ ...formData, sport: s })}
-                className={`py-4 rounded-xl ${
+                className={`py-4 rounded-xl font-bold transition ${
                   formData.sport === s
                     ? "bg-white text-black"
                     : "bg-white/5 text-gray-400"
@@ -127,13 +125,14 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           </div>
 
           {/* MODE */}
+
           <div className="flex gap-3">
             {["Solo", "Group"].map((m) => (
               <button
                 key={m}
                 disabled={loading}
                 onClick={() => setFormData({ ...formData, mode: m })}
-                className={`flex-1 py-3 rounded-xl ${
+                className={`flex-1 py-3 rounded-xl font-bold transition ${
                   formData.mode === m
                     ? "bg-emerald-500 text-black"
                     : "bg-white/5 text-gray-400"
@@ -145,6 +144,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           </div>
 
           {/* TEAM SIZE */}
+
           {formData.mode === "Group" && (
             <div className="flex flex-wrap gap-2">
               {[2, 3, 4, 5, 6].map((size) => (
@@ -164,6 +164,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           )}
 
           {/* STAKES */}
+
           <div className="space-y-3">
             <div className="flex gap-3">
               {[20, 50, 100].map((pts) => (
@@ -187,9 +188,10 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           </div>
 
           {/* VENUE */}
+
           <input
             placeholder="Venue Name"
-            className="w-full bg-white/5 p-3 rounded-xl"
+            className="w-full bg-white/5 p-3 rounded-xl outline-none"
             value={formData.venue}
             onChange={(e) =>
               setFormData({ ...formData, venue: e.target.value })
@@ -197,19 +199,22 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           />
 
           {/* DATE */}
+
           <input
             type="datetime-local"
-            className="w-full bg-white/5 p-3 rounded-xl"
+            className="w-full bg-white/5 p-3 rounded-xl outline-none"
             value={formData.date}
             onChange={(e) =>
               setFormData({ ...formData, date: e.target.value })
             }
           />
 
+          {/* SUBMIT */}
+
           <button
             onClick={handleDeploy}
             disabled={loading}
-            className="w-full bg-emerald-500 text-black py-4 rounded-xl flex justify-center items-center gap-2"
+            className="w-full bg-emerald-500 text-black py-4 rounded-xl flex justify-center items-center gap-2 font-bold"
           >
             {loading ? <Loader2 className="animate-spin" /> : "Deploy Challenge"}
           </button>
