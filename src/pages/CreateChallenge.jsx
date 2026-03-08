@@ -63,7 +63,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
             entry_points: formData.stakes,
           }
         ])
-        .select(`*, profiles:created_by (full_name, aura_score)`)
+        .select(`*, profiles:created_by (name, aura_points)`)
         .single();
 
       if (error) {
