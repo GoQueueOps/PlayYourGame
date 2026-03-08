@@ -120,7 +120,7 @@ function CreateChallenge({ isOpen, onClose }) {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-black/20 p-6 rounded-3xl border border-yellow-500/10 space-y-4"
+            className="bg-black/20 p-6 rounded-3xl border border-green-500/10 space-y-4"
           >
             <div className="flex items-center gap-2">
               <Gamepad2 size={13} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
@@ -133,7 +133,7 @@ function CreateChallenge({ isOpen, onClose }) {
                   onClick={() => setFormData({ ...formData, stakes: pts })}
                   className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
                     formData.stakes === pts
-                      ? "bg-yellow-500 text-black border-yellow-400 scale-105 shadow-xl"
+                      ? "bg-green-500 text-black border-green-400 scale-105 shadow-xl"
                       : "bg-white/5 text-slate-500 border-white/5 opacity-50"
                   }`}
                 >
@@ -146,11 +146,11 @@ function CreateChallenge({ isOpen, onClose }) {
               <div
                 className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${
                   ![20, 30, 40, 50].includes(formData.stakes)
-                    ? "bg-yellow-500/10 border-yellow-500"
+                    ? "bg-green-500/10 border-green-500"
                     : "bg-white/5 border-white/5"
                 }`}
               >
-                <Edit3 size={14} className="text-yellow-500 mr-2 shrink-0" />
+                <Edit3 size={14} className="text-green-500 mr-2 shrink-0" />
                 <input
                   type="number"
                   placeholder="Custom"
