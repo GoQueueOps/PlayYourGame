@@ -97,7 +97,7 @@ function ChallengeMode() {
       setLoading(true);
       const { data, error } = await supabase
         .from("matches")
-        .select(`*, profiles:created_by (full_name, aura_score)`)
+        .select(`*, profiles:created_by (name, aura_points)`)
         .eq("match_type", "challenge")
         .eq("status", "open")
         .order("created_at", { ascending: false });
@@ -218,10 +218,10 @@ function ChallengeMode() {
                       {match.sport || "Sport"}
                     </span>
                     <h3 className="text-3xl mt-2 text-white">
-                      {match.profiles?.full_name || "Athlete"}
+                      {match.profiles?.name || "Athlete"}
                     </h3>
                     <p className="text-[10px] text-slate-500">
-                      {match.mode || "Solo"} • Aura: {match.profiles?.aura_score || 0}
+                      {match.mode || "Solo"} • Aura: {match.profiles?.aura_points || 0}
                     </p>
                   </div>
 
