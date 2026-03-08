@@ -30,10 +30,9 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
     setFormData({ ...formData, stakes: numValue });
   };
 
-  // ─── LIVE DEPLOYMENT LOGIC ────────────────────────────────────────────────
   const handleDeploy = async () => {
-    if (!formData.venue || !formData.date) {
-      alert("PLEASE FILL ALL FIELDS");
+    if (!formData.date) {
+      alert("PLEASE SELECT A DATE");
       return;
     }
 
@@ -48,36 +47,37 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         return;
       }
 
-      // ─── DATABASE ALIGNED INSERT ───
-      // We only include columns that exist in your Supabase schema.
-      // 'mode', 'sport', and 'venue_name' are REMOVED from the insert object.
+      // ── Only inserting columns that EXIST in the matches table ──
+      // matches columns: id, booking_id, created_by, arena_id, sport_id,
+      //                  match_time, match_type, status, created_at,
+      //                  court_id, max_players, entry_points
+      // We store sport label + mode in match_type as a prefix for now
+      // since there's no separate text column for them.
       const { data, error } = await supabase
-  .from("matches")
-  .insert([
-    {
-      created_by: user.id,
-      match_type: "challenge",
-      status: "open",
-      match_time: new Date(formData.date).toISOString(),
-      max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
-      entry_points: formData.stakes
-    }
-  ])
-  .select(`*, profiles:created_by (name, aura_points)`)
-  .single();
+        .from("matches")
+        .insert([
+          {
+            created_by: user.id,
+            match_type: `challenge_${formData.sport}_${formData.mode}`.toLowerCase(),
+            status: "open",
+            match_time: new Date(formData.date).toISOString(),
+            max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
+            entry_points: formData.stakes,
+            // arena_id, sport_id, court_id, booking_id left null — not collected in this form
+          }
+        ])
+        .select()   // plain select * — no join, no risk of column mismatch
+        .single();
 
       if (error) {
-        console.error("CRITICAL DB ERROR:", error.message);
+        console.error("DB ERROR:", error.message);
         throw error;
       }
 
       if (onChallengeCreated) onChallengeCreated(data);
-
-      alert("CHALLENGE LIVE IN LOBBY");
       onClose();
 
     } catch (error) {
-      // This catches the 'column not found' error if anything extra was left in
       alert(`DEPLOYMENT FAILED: ${error.message}`);
     } finally {
       setLoading(false);
@@ -177,7 +177,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           {/* STAKES */}
           <div className="bg-black/20 p-6 rounded-3xl border border-emerald-500/10 space-y-4">
             <div className="flex items-center gap-2">
-              <Gamepad2 size={13} className="text-emerald-400" />
+              <Gamepad2 size={13} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
               <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Stakes (G-Points)</p>
             </div>
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
@@ -192,33 +192,44 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                       : "bg-white/5 text-slate-500 border-white/5 opacity-50"
                   }`}
                 >
-                  <span className="text-xs">{pts}</span>
+                  <Gamepad2
+                    size={13}
+                    className={formData.stakes === pts ? "text-black" : "text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]"}
+                  />
+                  <span className="text-xs mt-0.5">{pts}</span>
                 </button>
               ))}
-
               <div className={`relative min-w-[120px] h-[60px] rounded-2xl border flex items-center px-4 ${![20, 50, 100].includes(formData.stakes) ? "bg-emerald-500/10 border-emerald-500" : "bg-white/5 border-white/5"}`}>
                 <Edit3 size={14} className="text-emerald-400 mr-2 shrink-0" />
                 <input
                   type="number"
                   disabled={loading}
                   placeholder="Custom"
-                  className="bg-transparent w-full outline-none text-xs font-black text-white"
+                  className="bg-transparent w-full outline-none text-xs font-black text-white placeholder:text-slate-600"
                   value={![20, 50, 100].includes(formData.stakes) ? formData.stakes : ""}
                   onChange={(e) => handleCustomStakes(e.target.value)}
                 />
               </div>
             </div>
-            <p className="text-[10px] text-emerald-400/80 text-right uppercase">Prize Pool: {winnerAmount} G-PTS</p>
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-[9px] text-slate-500 uppercase italic">Prize Pool</span>
+              <div className="flex items-center gap-1.5">
+                <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                <p className="text-emerald-100 text-sm font-black italic tracking-tighter">
+                  Winner Takes: <span className="text-emerald-400">{winnerAmount}</span> G-PTS
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* INPUTS */}
-          <div className="space-y-3 font-sans font-medium not-italic uppercase">
+          {/* VENUE (display only — stored locally, no DB column) */}
+          <div className="space-y-3 font-sans font-medium not-italic">
             <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
               <MapPin size={18} className="text-emerald-500" />
               <input
                 disabled={loading}
-                placeholder="VENUE NAME"
-                className="bg-transparent outline-none flex-1 text-sm text-white font-bold"
+                placeholder="Venue Name (optional)"
+                className="bg-transparent outline-none flex-1 text-sm text-white font-bold placeholder:text-slate-600"
                 value={formData.venue}
                 onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
               />

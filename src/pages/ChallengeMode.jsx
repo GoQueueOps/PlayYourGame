@@ -9,21 +9,30 @@ import { motion, AnimatePresence } from "framer-motion";
 import CreateChallenge from "../pages/CreateChallenge"; 
 import { supabase } from "../lib/supabase";
 
-// --- 1. ARENA LEGENDS PREVIEW SECTION ---
+// Parses "challenge_football_solo" → { sport: "Football", mode: "Solo" }
+function parseMatchType(matchType = "") {
+  const parts = matchType.split("_");
+  // parts[0] = "challenge", parts[1] = sport, parts[2] = mode
+  const sport = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : "Sport";
+  const mode  = parts[2] ? parts[2].charAt(0).toUpperCase() + parts[2].slice(1) : "Solo";
+  return { sport, mode };
+}
+
+// --- ARENA LEGENDS SECTION ---
 function ArenaLegendsSection() {
   const navigate = useNavigate();
   const [boardType, setBoardType] = useState("Lobby");
 
   const leaderboardData = {
     Solo: [
-      { rank: 1, name: "Nitro", score: 2840, matches: 58, wins: 45 },
-      { rank: 2, name: "Z-Storm", score: 2610, matches: 40, wins: 32 },
-      { rank: 3, name: "Shadow", score: 2450, matches: 35, wins: 20 },
+      { rank: 1, name: "Nitro",        score: 2840, matches: 58,  wins: 45 },
+      { rank: 2, name: "Z-Storm",      score: 2610, matches: 40,  wins: 32 },
+      { rank: 3, name: "Shadow",       score: 2450, matches: 35,  wins: 20 },
     ],
     Lobby: [
       { rank: 1, name: "CDA Strikers", score: 8900, matches: 120, wins: 95 },
-      { rank: 2, name: "City FC", score: 7200, matches: 98, wins: 85 },
-      { rank: 3, name: "BBS Smashers", score: 6800, matches: 80, wins: 60 },
+      { rank: 2, name: "City FC",      score: 7200, matches: 98,  wins: 85 },
+      { rank: 3, name: "BBS Smashers", score: 6800, matches: 80,  wins: 60 },
     ]
   };
 
@@ -36,7 +45,6 @@ function ArenaLegendsSection() {
           </h2>
           <p className="text-slate-500 text-[10px] tracking-[0.4em] mt-2">Top Performers • Global</p>
         </div>
-
         <div className="flex flex-col items-end gap-4 w-full md:w-auto">
           <button onClick={() => navigate("/arena-legends")} className="group flex items-center gap-2 text-[10px] text-emerald-500 transition-all">
             <span className="border-b border-emerald-500/20 pb-1 group-hover:border-emerald-500">View Full Rankings</span>
@@ -52,7 +60,6 @@ function ArenaLegendsSection() {
           </div>
         </div>
       </div>
-
       <div className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl">
         {leaderboardData[boardType].map((item) => (
           <div key={item.name} className="flex items-center justify-between p-8 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-all">
@@ -83,10 +90,7 @@ function ArenaLegendsSection() {
                 <p className="text-[9px] text-slate-500 mb-1">Wins</p>
                 <p className="text-xl text-white">{item.wins} WINS</p>
               </div>
-              <button
-                onClick={() => navigate("/arena-legends")}
-                className="bg-white/5 border border-white/10 px-8 py-4 rounded-2xl text-[10px] text-white hover:bg-white hover:text-black transition-all"
-              >
+              <button onClick={() => navigate("/arena-legends")} className="bg-white/5 border border-white/10 px-8 py-4 rounded-2xl text-[10px] text-white hover:bg-white hover:text-black transition-all">
                 Profile
               </button>
             </div>
@@ -108,10 +112,21 @@ function ChallengeMode() {
   const fetchChallenges = async () => {
     try {
       setLoading(true);
+
+      // ── Exact columns only — no phantom fields, no join ──
       const { data, error } = await supabase
         .from("matches")
-        .select(`*, profiles:created_by (name)`)   // ← only columns that exist
-        .eq("match_type", "challenge")
+        .select(`
+          id,
+          created_by,
+          match_type,
+          status,
+          match_time,
+          created_at,
+          max_players,
+          entry_points
+        `)
+        .like("match_type", "challenge_%")   // catches all challenge_sport_mode rows
         .eq("status", "open")
         .order("created_at", { ascending: false });
 
@@ -124,18 +139,16 @@ function ChallengeMode() {
     }
   };
 
-  useEffect(() => {
-    fetchChallenges();
-  }, []);
+  useEffect(() => { fetchChallenges(); }, []);
 
   const handleChallengeCreated = (newMatch) => {
     setChallenges((prev) => [newMatch, ...prev]);
   };
 
   const formatMatchTime = (dateStr) => {
-    return new Date(dateStr).toLocaleString('en-IN', {
-      weekday: 'short', day: 'numeric', month: 'short',
-      hour: '2-digit', minute: '2-digit'
+    return new Date(dateStr).toLocaleString("en-IN", {
+      weekday: "short", day: "numeric", month: "short",
+      hour: "2-digit", minute: "2-digit"
     });
   };
 
@@ -205,61 +218,60 @@ function ChallengeMode() {
           </div>
         ) : filteredChallenges.length === 0 ? (
           <div className="col-span-full py-20 bg-white/5 rounded-[3rem] border border-dashed border-white/10 text-center">
-            <p className="text-slate-500 tracking-widest">No active nodes.</p>
+            <p className="text-slate-500 tracking-widest">No active challenges.</p>
           </div>
         ) : (
           <AnimatePresence mode="popLayout">
-            {filteredChallenges.map((match) => (
-              <motion.div
-                key={match.id}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] p-8 group hover:border-emerald-500/50 transition-all text-left"
-              >
-                <div className="flex justify-between items-start mb-10">
-                  <div className="space-y-1">
-                    <span className="px-3 py-1 rounded-full text-[9px] border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-                      {match.sport || "Sport"}
-                    </span>
-                    <h3 className="text-3xl mt-2 text-white">
-                      {match.profiles?.name || "Athlete"}
-                    </h3>
-                    <p className="text-[10px] text-slate-500">
-                      {match.mode || "Solo"}
-                    </p>
-                  </div>
-
-                  {/* G-Points badge */}
-                  <div className="text-right">
-                    <div className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-100 px-4 py-2 rounded-xl text-sm shadow-xl">
-                      <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
-                      <span className="font-black">{match.entry_points}</span>
+            {filteredChallenges.map((match) => {
+              const { sport, mode } = parseMatchType(match.match_type);
+              return (
+                <motion.div
+                  key={match.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] p-8 group hover:border-emerald-500/50 transition-all text-left"
+                >
+                  <div className="flex justify-between items-start mb-10">
+                    <div className="space-y-1">
+                      <span className="px-3 py-1 rounded-full text-[9px] border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                        {sport}
+                      </span>
+                      <h3 className="text-3xl mt-2 text-white">Athlete</h3>
+                      <p className="text-[10px] text-slate-500">{mode}</p>
                     </div>
-                    <p className="text-[9px] text-emerald-500 mt-2 flex items-center justify-end gap-1">
-                      <Gamepad2 size={9} className="text-emerald-400" />
-                      Pot: {match.entry_points * 2} G-PTS
-                    </p>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[8px] text-slate-500 mb-1">Venue</p>
-                    <p className="text-[11px] truncate text-white">{match.venue_name || "TBD"}</p>
+                    {/* G-Points badge */}
+                    <div className="text-right">
+                      <div className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-100 px-4 py-2 rounded-xl text-sm shadow-xl">
+                        <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                        <span className="font-black">{match.entry_points}</span>
+                      </div>
+                      <p className="text-[9px] text-emerald-500 mt-2 flex items-center justify-end gap-1">
+                        <Gamepad2 size={9} className="text-emerald-400" />
+                        Pot: {match.entry_points * 2} G-PTS
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[8px] text-slate-500 mb-1">Kickoff</p>
-                    <p className="text-[11px] truncate text-white">{formatMatchTime(match.match_time)}</p>
-                  </div>
-                </div>
 
-                <button className="w-full bg-emerald-500 text-black py-5 rounded-2xl text-xs tracking-[0.2em] hover:bg-white transition-all active:scale-95">
-                  Accept Challenge »
-                </button>
-              </motion.div>
-            ))}
+                  <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                      <p className="text-[8px] text-slate-500 mb-1">Players</p>
+                      <p className="text-[11px] text-white">{match.max_players} Max</p>
+                    </div>
+                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                      <p className="text-[8px] text-slate-500 mb-1">Kickoff</p>
+                      <p className="text-[11px] truncate text-white">{formatMatchTime(match.match_time)}</p>
+                    </div>
+                  </div>
+
+                  <button className="w-full bg-emerald-500 text-black py-5 rounded-2xl text-xs tracking-[0.2em] hover:bg-white transition-all active:scale-95">
+                    Accept Challenge »
+                  </button>
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         )}
       </main>
