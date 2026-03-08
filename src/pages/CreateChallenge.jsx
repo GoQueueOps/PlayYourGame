@@ -7,8 +7,7 @@ import {
   Calendar,
   Edit3,
   Loader2,
-  ChevronDown,
-  Search
+  ChevronDown
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
