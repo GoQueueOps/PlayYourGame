@@ -6,7 +6,7 @@ import {
   ChevronRight, Loader2 
 } from "lucide-react"; 
 import { motion, AnimatePresence } from "framer-motion";
-import CreateChallenge from "../components/CreateChallenge"; 
+import CreateChallenge from "../pages/CreateChallenge"; 
 import { supabase } from "../lib/supabase";
 
 // --- 1. ARENA LEGENDS PREVIEW SECTION ---
