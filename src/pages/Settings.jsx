@@ -270,3 +270,4 @@ const UploadIcon = () => (
 );
 
 export default Settings;
+

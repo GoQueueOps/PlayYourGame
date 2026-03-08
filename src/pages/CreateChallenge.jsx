@@ -13,7 +13,6 @@ function CreateChallenge({ isOpen, onClose }) {
     sport: "Football",
     mode: "Solo",
     teamSize: 3,
-    type: "Friendly",
     stakes: 20,
     venue: "",
     date: ""
@@ -51,7 +50,7 @@ function CreateChallenge({ isOpen, onClose }) {
             <h2 className="text-2xl uppercase tracking-tighter italic">
               Launch <span className="text-emerald-500">Challenge</span>
             </h2>
-            <button 
+            <button
               onClick={onClose}
               className="p-2 hover:bg-white/10 rounded-full transition-colors"
             >
@@ -117,74 +116,57 @@ function CreateChallenge({ isOpen, onClose }) {
             </motion.div>
           )}
 
-          {/* MATCH TYPE */}
-          <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5">
-            {["Friendly", "Competitive"].map((type) => (
-              <button
-                key={type}
-                onClick={() => setFormData({ ...formData, type })}
-                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  formData.type === type
-                    ? "bg-orange-600 text-white shadow-lg"
-                    : "text-slate-500 hover:text-slate-300"
+          {/* STAKES — always shown (competitive only) */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-black/20 p-6 rounded-3xl border border-yellow-500/10 space-y-4"
+          >
+            <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">
+              Stakes (G-Points)
+            </p>
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+              {[20, 30, 40, 50].map((pts) => (
+                <button
+                  key={pts}
+                  onClick={() => setFormData({ ...formData, stakes: pts })}
+                  className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
+                    formData.stakes === pts
+                      ? "bg-yellow-500 text-black border-yellow-400 scale-105 shadow-xl"
+                      : "bg-white/5 text-slate-500 border-white/5 opacity-50"
+                  }`}
+                >
+                  <Zap size={12} fill={formData.stakes === pts ? "black" : "none"} />
+                  <span className="text-xs">{pts}</span>
+                </button>
+              ))}
+
+              {/* CUSTOM POINT FIELD */}
+              <div
+                className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${
+                  ![20, 30, 40, 50].includes(formData.stakes)
+                    ? "bg-yellow-500/10 border-yellow-500"
+                    : "bg-white/5 border-white/5"
                 }`}
               >
-                {type}
-              </button>
-            ))}
-          </div>
+                <Edit3 size={14} className="text-yellow-500 mr-2 shrink-0" />
+                <input
+                  type="number"
+                  placeholder="Custom"
+                  className="bg-transparent w-full outline-none text-xs font-black text-white placeholder:text-slate-600"
+                  value={![20, 30, 40, 50].includes(formData.stakes) ? formData.stakes : ""}
+                  onChange={(e) => handleCustomStakes(e.target.value)}
+                />
+              </div>
+            </div>
 
-          {/* STAKES (COMPETITIVE ONLY) */}
-          {formData.type === "Competitive" && (
-            <motion.div 
-                initial={{ opacity: 0, y: 10 }} 
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-black/20 p-6 rounded-3xl border border-yellow-500/10 space-y-4"
-            >
-              <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">
-                Stakes (Z-Points)
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-[9px] text-slate-500 uppercase italic">Pot Pool</span>
+              <p className="text-yellow-400 text-sm font-black italic tracking-tighter">
+                Winner Takes: {winnerAmount} G-PTS
               </p>
-              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-                {[20, 30, 40, 50].map((pts) => (
-                  <button
-                    key={pts}
-                    onClick={() => setFormData({ ...formData, stakes: pts })}
-                    className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
-                      formData.stakes === pts
-                        ? "bg-yellow-500 text-black border-yellow-400 scale-105 shadow-xl"
-                        : "bg-white/5 text-slate-500 border-white/5 opacity-50"
-                    }`}
-                  >
-                    <Zap size={12} fill={formData.stakes === pts ? "black" : "none"} />
-                    <span className="text-xs">{pts}</span>
-                  </button>
-                ))}
-                
-                {/* CUSTOM POINT FIELD */}
-                <div className={`relative min-w-[120px] h-[60px] rounded-2xl flex items-center px-3 border transition-all ${
-                    ![20,30,40,50].includes(formData.stakes) 
-                    ? "bg-yellow-500/10 border-yellow-500" 
-                    : "bg-white/5 border-white/5"
-                }`}>
-                    <Edit3 size={14} className="text-yellow-500 mr-2 shrink-0" />
-                    <input 
-                        type="number"
-                        placeholder="Custom"
-                        className="bg-transparent w-full outline-none text-xs font-black text-white placeholder:text-slate-600"
-                        value={![20,30,40,50].includes(formData.stakes) ? formData.stakes : ""}
-                        onChange={(e) => handleCustomStakes(e.target.value)}
-                    />
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-[9px] text-slate-500 uppercase italic">Pot Pool</span>
-                <p className="text-yellow-400 text-sm font-black italic tracking-tighter">
-                  Winner Takes: {winnerAmount} Z-PTS
-                </p>
-              </div>
-            </motion.div>
-          )}
+            </div>
+          </motion.div>
 
           {/* VENUE & DATE */}
           <div className="space-y-3 font-sans non-italic font-medium">
