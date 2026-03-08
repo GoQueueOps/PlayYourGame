@@ -1,18 +1,20 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Trophy, Swords, Zap, 
   ChevronLeft, Medal, Star, Target, Users, User, Plus, 
-  ChevronRight 
+  ChevronRight, Loader2 
 } from "lucide-react"; 
 import { motion, AnimatePresence } from "framer-motion";
 import CreateChallenge from "./CreateChallenge"; 
+import { supabase } from "../lib/supabase"; // Ensure this path is correct
 
 // --- 1. ARENA LEGENDS PREVIEW SECTION ---
 function ArenaLegendsSection() {
   const navigate = useNavigate();
   const [boardType, setBoardType] = useState("Lobby");
 
+  // These should eventually be fetched from your 'profiles' table ordered by aura_score
   const leaderboardData = {
     Solo: [
       { rank: 1, name: "Nitro", score: 2840, matches: 58, wins: 45 },
@@ -30,11 +32,11 @@ function ArenaLegendsSection() {
     <div className="max-w-6xl mx-auto mt-20 relative z-10 pb-20 font-sans italic">
       <div className="flex flex-col md:flex-row items-end justify-between mb-8 px-4 gap-6">
         <div className="w-full md:w-auto">
-          <h2 className="text-4xl font-black uppercase italic tracking-tighter leading-none">
+          <h2 className="text-4xl font-black uppercase italic tracking-tighter leading-none text-white">
             Arena <span className="text-emerald-500">Legends</span>
           </h2>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.4em] mt-2 italic">
-            Top Sector Performers • Cuttack
+            Top Sector Performers • Live Rankings
           </p>
         </div>
 
@@ -70,7 +72,7 @@ function ArenaLegendsSection() {
         {leaderboardData[boardType].map((item) => (
           <div key={item.name} className="flex items-center justify-between p-8 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-all group">
             <div className="flex items-center gap-8">
-              <div className="w-12 text-center">
+              <div className="w-12 text-center text-white">
                 {item.rank === 1 ? (
                   <Trophy className="text-yellow-500 mx-auto" size={32} />
                 ) : (
@@ -78,7 +80,7 @@ function ArenaLegendsSection() {
                 )}
               </div>
               <div>
-                <h4 className="text-2xl font-black uppercase italic tracking-tight group-hover:text-emerald-500 transition-colors flex items-center gap-2">
+                <h4 className="text-2xl font-black uppercase italic tracking-tight text-white group-hover:text-emerald-500 transition-colors flex items-center gap-2">
                   {item.name} {item.rank === 1 && <Star size={16} className="text-yellow-500 fill-yellow-500" />}
                 </h4>
                 <div className="flex items-center gap-4 mt-1">
@@ -97,7 +99,7 @@ function ArenaLegendsSection() {
                 <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Win Count</p>
                 <p className="text-xl font-black text-white italic">{item.wins} WINS</p>
               </div>
-              <button onClick={() => navigate("/arena-legends")} className="bg-white/5 border border-white/10 px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all">
+              <button onClick={() => navigate("/arena-legends")} className="bg-white/5 border border-white/10 px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all">
                 Profile
               </button>
             </div>
@@ -109,30 +111,70 @@ function ArenaLegendsSection() {
 }
 
 // --- 2. MAIN CHALLENGE MODE PAGE ---
-const mockChallenges = [
-  { id: "CH-001", sport: "Football", teamA: { name: "CDA Strikers", rank: "Gold II" }, venue: "Krater's Arena", time: "Today, 7:00 PM", slab: 50, type: "Competitive" },
-  { id: "CH-002", sport: "Cricket", teamA: { name: "City FC", rank: "Silver I" }, venue: "Sports City", time: "Tomorrow, 6:00 AM", slab: 30, type: "Friendly" },
-  { id: "CH-003", sport: "Pickleball", teamA: { name: "Shadow Solo", rank: "Gold I" }, venue: "Turf King", time: "Today, 9:00 PM", slab: 20, type: "Competitive" },
-];
-
 function ChallengeMode() {
   const navigate = useNavigate();
+  const [challenges, setChallenges] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedSlab, setSelectedSlab] = useState("All");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Fetch Challenges from Supabase
+  const fetchChallenges = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("matches")
+        .select(`
+          *,
+          profiles:created_by (full_name, aura_score)
+        `)
+        .eq("match_type", "challenge")
+        .eq("status", "open")
+        .order("match_time", { ascending: true });
+
+      if (error) throw error;
+      setChallenges(data || []);
+    } catch (err) {
+      console.error("Error fetching matches:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchChallenges();
+  }, []);
+
+  // Helper to format Supabase date
+  const formatMatchTime = (dateStr) => {
+    const d = new Date(dateStr);
+    return d.toLocaleString('en-IN', { 
+      weekday: 'short', 
+      day: 'numeric', 
+      month: 'short', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  };
+
   const filteredChallenges = selectedSlab === "All" 
-    ? mockChallenges 
-    : mockChallenges.filter(c => c.slab === selectedSlab);
+    ? challenges 
+    : challenges.filter(c => c.entry_points === selectedSlab);
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white font-sans p-6 lg:p-12 relative overflow-x-hidden italic selection:bg-emerald-500/30 font-black">
+    <div className="min-h-screen bg-[#020617] text-white font-sans p-6 lg:p-12 relative overflow-x-hidden italic selection:bg-emerald-500/30 font-black uppercase">
       <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-emerald-500/5 blur-[150px] rounded-full pointer-events-none" />
 
-      <CreateChallenge isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      {/* Modal is updated to include the callback to update the local list */}
+      <CreateChallenge 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onChallengeCreated={(newMatch) => setChallenges([newMatch, ...challenges])}
+      />
 
       <header className="max-w-6xl mx-auto mb-12 relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex items-center gap-6">
-          <button onClick={() => navigate(-1)} className="p-3 bg-white/5 border border-white/10 rounded-2xl active:scale-90 transition-all">
+          <button onClick={() => navigate(-1)} className="p-3 bg-white/5 border border-white/10 rounded-2xl active:scale-90 transition-all text-white">
             <ChevronLeft size={24} />
           </button>
           <div>
@@ -150,7 +192,7 @@ function ChallengeMode() {
 
       {/* FILTER TABS */}
       <div className="max-w-6xl mx-auto mb-10 flex gap-4 overflow-x-auto no-scrollbar pb-2">
-        {["All", 20, 30, 40, 50].map((slab) => (
+        {["All", 20, 50, 100].map((slab) => (
           <button
             key={slab}
             onClick={() => setSelectedSlab(slab)}
@@ -158,50 +200,72 @@ function ChallengeMode() {
               selectedSlab === slab ? "bg-white text-black border-white shadow-xl" : "bg-white/5 border-white/10 text-slate-500"
             }`}
           >
-            {slab === "All" ? "All Stakes" : `${slab} Z-Points`}
+            {slab === "All" ? "All Stakes" : `${slab} G-Points`}
           </button>
         ))}
       </div>
 
       <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10 font-black italic">
-        <AnimatePresence mode="popLayout">
-          {filteredChallenges.map((match) => (
-            <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} key={match.id} className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] p-8 relative overflow-hidden group hover:border-emerald-500/50 transition-all italic font-black">
-              <div className="flex justify-between items-start mb-10 relative z-10">
-                <div className="space-y-1">
-                  <span className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest border ${match.type === 'Competitive' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
-                    {match.type}
-                  </span>
-                  <h3 className="text-3xl font-black uppercase italic tracking-tight mt-2">{match.teamA.name}</h3>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest">{match.sport} • {match.teamA.rank}</p>
+        {loading ? (
+          <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4 text-slate-500">
+            <Loader2 className="animate-spin text-emerald-500" size={40} />
+            <p className="text-[10px] tracking-widest uppercase">Syncing with Arena Grid...</p>
+          </div>
+        ) : filteredChallenges.length === 0 ? (
+          <div className="col-span-full py-20 bg-white/5 rounded-[3rem] border border-dashed border-white/10 flex flex-col items-center justify-center text-center">
+            <Swords size={48} className="text-slate-700 mb-4" />
+            <p className="text-slate-500 tracking-widest">No active challenges in this sector.</p>
+            <button onClick={() => setIsModalOpen(true)} className="mt-4 text-emerald-500 text-[10px] border-b border-emerald-500/20">Launch the first one »</button>
+          </div>
+        ) : (
+          <AnimatePresence mode="popLayout">
+            {filteredChallenges.map((match) => (
+              <motion.div 
+                layout 
+                initial={{ opacity: 0, scale: 0.9 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                exit={{ opacity: 0, scale: 0.9 }} 
+                key={match.id} 
+                className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] p-8 relative overflow-hidden group hover:border-emerald-500/50 transition-all italic font-black"
+              >
+                <div className="flex justify-between items-start mb-10 relative z-10">
+                  <div className="space-y-1">
+                    <span className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest border bg-emerald-500/10 text-emerald-500 border-emerald-500/20`}>
+                      {match.sport}
+                    </span>
+                    <h3 className="text-3xl font-black uppercase italic tracking-tight mt-2 text-white">
+                      {match.profiles?.full_name || "Unknown Athlete"}
+                    </h3>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+                      {match.mode} • Aura: {match.profiles?.aura_score || 0}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-2 bg-emerald-500 text-black px-4 py-2 rounded-xl font-black italic text-sm shadow-xl">
+                      <Zap size={14} fill="currentColor" /> {match.entry_points} G-PTS
+                    </div>
+                    <p className="text-[9px] font-black text-emerald-500 uppercase mt-2 tracking-tight italic">
+                      Pool: {match.entry_points * 2} G-PTS
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  {match.type === "Competitive" ? (
-                    <>
-                      <div className="flex items-center gap-2 bg-yellow-500 text-black px-4 py-2 rounded-xl font-black italic text-sm shadow-xl">
-                        <Zap size={14} fill="currentColor" /> {match.slab} Z-PTS
-                      </div>
-                      <p className="text-[9px] font-black text-emerald-500 uppercase mt-2 tracking-tight italic">Pot: {match.slab * 2} Z-PTS</p>
-                    </>
-                  ) : (
-                    <div className="bg-blue-500/10 text-blue-400 px-4 py-2 rounded-xl border border-blue-500/20 text-[10px] uppercase font-black tracking-widest">Friendly Match</div>
-                  )}
+                <div className="grid grid-cols-2 gap-4 mb-8 relative z-10">
+                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[8px] font-black uppercase text-slate-500 mb-1 tracking-widest italic">Venue</p>
+                    <p className="text-[11px] font-bold uppercase truncate text-white">{match.venue_name || "TBD"}</p>
+                  </div>
+                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[8px] font-black uppercase text-slate-500 mb-1 tracking-widest italic">Kickoff</p>
+                    <p className="text-[11px] font-bold uppercase truncate text-white">{formatMatchTime(match.match_time)}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mb-8 relative z-10">
-                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                  <p className="text-[8px] font-black uppercase text-slate-500 mb-1 tracking-widest italic">Location</p>
-                  <p className="text-[11px] font-bold uppercase truncate">{match.venue}</p>
-                </div>
-                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                  <p className="text-[8px] font-black uppercase text-slate-500 mb-1 tracking-widest italic">Time Slot</p>
-                  <p className="text-[11px] font-bold uppercase truncate">{match.time}</p>
-                </div>
-              </div>
-              <button className="w-full bg-emerald-500 text-black py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-white transition-all active:scale-95 italic font-black">Accept Challenge Back »</button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+                <button className="w-full bg-emerald-500 text-black py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-white transition-all active:scale-95 italic">
+                  Accept Challenge Back »
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        )}
       </main>
 
       <ArenaLegendsSection />
