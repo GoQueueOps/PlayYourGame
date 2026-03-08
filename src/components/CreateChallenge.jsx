@@ -1,12 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Gamepad2, MapPin, Calendar, Edit3, Loader2 } from "lucide-react";
+import { X, Gamepad2, MapPin, Calendar, Edit3, Loader2, Upload, Plus } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
   const [loading, setLoading] = useState(false);
-  const logoInputRef = useRef(null);
-  const galleryInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     sport: "Football",
@@ -14,7 +12,9 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
     teamSize: 3,
     stakes: 20,
     venue: "",
-    date: ""
+    date: "",
+    logo: null,
+    images: []
   });
 
   if (!isOpen) return null;
@@ -24,6 +24,17 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
   const handleCustomStakes = (value) => {
     const numValue = parseInt(value) || 0;
     setFormData({ ...formData, stakes: numValue });
+  };
+
+  const handleMedia = (type, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (type === 'logo') setFormData({ ...formData, logo: ev.target.result });
+      else setFormData({ ...formData, images: [...formData.images, ev.target.result] });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleDeploy = async () => {
@@ -43,7 +54,6 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         return;
       }
 
-      // 1. Insert and immediately select join data
       const { data, error } = await supabase
         .from("matches")
         .insert([
@@ -69,7 +79,6 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
 
       alert("CHALLENGE BROADCASTED TO LOBBY");
 
-      // 2. Pass the data with profiles to the Lobby
       if (onChallengeCreated) {
         onChallengeCreated(data);
       }
@@ -109,6 +118,24 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
             </button>
           </div>
 
+          {/* MEDIA UPLOAD AREA */}
+          <div className="grid grid-cols-3 gap-4">
+            <label className="aspect-square bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all hover:border-emerald-500/50">
+              {formData.logo ? (
+                <img src={formData.logo} alt="Logo" className="w-full h-full object-cover" />
+              ) : (
+                <><Upload size={16} /><span className="text-[6px] mt-1">Logo</span></>
+              )}
+              <input type="file" className="hidden" onChange={(e) => handleMedia('logo', e)} />
+            </label>
+            <label className="col-span-2 aspect-[16/9] bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500/50 transition-all">
+              <Plus size={16} />
+              <span className="text-[6px] mt-1 italic uppercase">Gallery ({formData.images.length})</span>
+              <input type="file" className="hidden" multiple onChange={(e) => handleMedia('gallery', e)} />
+            </label>
+          </div>
+
+          {/* SPORT SELECTOR */}
           <div className="grid grid-cols-2 gap-3">
             {["Football", "Cricket", "Badminton", "Pickleball"].map((s) => (
               <button
@@ -116,7 +143,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                 disabled={loading}
                 onClick={() => setFormData({ ...formData, sport: s })}
                 className={`py-4 rounded-2xl text-[10px] tracking-widest transition-all border ${
-                  formData.sport === s ? "bg-white text-black border-white shadow-xl shadow-white/10" : "bg-white/5 text-slate-500 border-white/5 hover:border-white/20"
+                  formData.sport === s ? "bg-white text-black border-white shadow-xl" : "bg-white/5 text-slate-500 border-white/5"
                 }`}
               >
                 {s}
@@ -131,7 +158,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                 disabled={loading}
                 onClick={() => setFormData({ ...formData, mode: m })}
                 className={`flex-1 py-3 rounded-2xl text-[10px] tracking-widest transition-all border ${
-                  formData.mode === m ? "bg-emerald-500 text-black border-emerald-400 shadow-lg shadow-emerald-500/20" : "bg-white/5 text-slate-500 border-white/5"
+                  formData.mode === m ? "bg-emerald-500 text-black border-emerald-400" : "bg-white/5 text-slate-500 border-white/5"
                 }`}
               >
                 {m}
@@ -147,7 +174,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                   disabled={loading}
                   onClick={() => setFormData({ ...formData, teamSize: size })}
                   className={`px-5 py-2 rounded-xl text-[10px] transition-all border ${
-                    formData.teamSize === size ? "bg-blue-500 text-white border-blue-400" : "bg-white/5 text-slate-500 border-white/5"
+                    formData.teamSize === size ? "bg-blue-500 text-white border-blue-400" : "bg-white/5 text-slate-500"
                   }`}
                 >
                   {size}v{size}
@@ -159,7 +186,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           <div className="bg-black/40 p-6 rounded-[2rem] border border-white/5 space-y-4">
             <div className="flex items-center gap-2">
               <Gamepad2 size={14} className="text-emerald-500" />
-              <p className="text-[9px] tracking-widest text-slate-500">Stakes Protocol (G-PTS)</p>
+              <p className="text-[9px] tracking-widest text-slate-500 text-left">Stakes protocol</p>
             </div>
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
               {[20, 50, 100].map((pts) => (
@@ -186,7 +213,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                 />
               </div>
             </div>
-            <p className="text-[10px] text-emerald-400/80 text-right uppercase">Winner Takes: {winnerAmount} G-PTS</p>
+            <p className="text-[10px] text-emerald-400/80 text-right uppercase">Winner Pool: {winnerAmount} G-PTS</p>
           </div>
 
           <div className="space-y-3 font-sans non-italic">
