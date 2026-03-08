@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -6,7 +6,9 @@ import {
   MapPin,
   Calendar,
   Edit3,
-  Loader2
+  Loader2,
+  ChevronDown,
+  Search
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -17,9 +19,90 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
     mode: "Solo",
     teamSize: 3,
     stakes: 20,
-    venue: "",
+    arenaId: null,
+    arenaName: "",
     date: ""
   });
+
+  // ── Venue search state ──
+  const [venueSearch, setVenueSearch] = useState("");
+  const [venues, setVenues] = useState([]);
+  const [venueLoading, setVenueLoading] = useState(false);
+  const [venueOpen, setVenueOpen] = useState(false);
+  const [userCity, setUserCity] = useState(null);
+  const venueRef = useRef(null);
+
+  // ── Detect user city via geolocation on mount ──
+  useEffect(() => {
+    if (!isOpen) return;
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
+            );
+            const data = await res.json();
+            const city =
+              data.address.city ||
+              data.address.town ||
+              data.address.village ||
+              null;
+            setUserCity(city);
+          } catch {
+            setUserCity(null);
+          }
+        },
+        () => setUserCity(null)
+      );
+    }
+  }, [isOpen]);
+
+  // ── Fetch venues from arenas table, filtered by city + search ──
+  useEffect(() => {
+    if (!venueOpen) return;
+    const fetchVenues = async () => {
+      setVenueLoading(true);
+      try {
+        let query = supabase
+          .from("arenas")
+          .select("id, name, location, city")
+          .order("name");
+
+        // Filter by user's city if detected
+        if (userCity) {
+          query = query.ilike("location", `%${userCity}%`);
+        }
+
+        // Further filter by search text
+        if (venueSearch.trim()) {
+          query = query.ilike("name", `%${venueSearch.trim()}%`);
+        }
+
+        query = query.limit(10);
+        const { data, error } = await query;
+        if (error) throw error;
+        setVenues(data || []);
+      } catch (err) {
+        console.error("Venue fetch error:", err.message);
+        setVenues([]);
+      } finally {
+        setVenueLoading(false);
+      }
+    };
+    fetchVenues();
+  }, [venueOpen, venueSearch, userCity]);
+
+  // ── Close dropdown on outside click ──
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (venueRef.current && !venueRef.current.contains(e.target)) {
+        setVenueOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -28,6 +111,12 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
   const handleCustomStakes = (value) => {
     const numValue = parseInt(value) || 0;
     setFormData({ ...formData, stakes: numValue });
+  };
+
+  const selectVenue = (venue) => {
+    setFormData({ ...formData, arenaId: venue.id, arenaName: venue.name });
+    setVenueSearch(venue.name);
+    setVenueOpen(false);
   };
 
   const handleDeploy = async () => {
@@ -47,26 +136,24 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         return;
       }
 
-      // ── Only inserting columns that EXIST in the matches table ──
-      // matches columns: id, booking_id, created_by, arena_id, sport_id,
-      //                  match_time, match_type, status, created_at,
-      //                  court_id, max_players, entry_points
-      // We store sport label + mode in match_type as a prefix for now
-      // since there's no separate text column for them.
+      const insertPayload = {
+        created_by: user.id,
+        match_type: `challenge_${formData.sport}_${formData.mode}`.toLowerCase(),
+        status: "open",
+        match_time: new Date(formData.date).toISOString(),
+        max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
+        entry_points: formData.stakes,
+      };
+
+      // Only add arena_id if user picked one
+      if (formData.arenaId) {
+        insertPayload.arena_id = formData.arenaId;
+      }
+
       const { data, error } = await supabase
         .from("matches")
-        .insert([
-          {
-            created_by: user.id,
-            match_type: `challenge_${formData.sport}_${formData.mode}`.toLowerCase(),
-            status: "open",
-            match_time: new Date(formData.date).toISOString(),
-            max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
-            entry_points: formData.stakes,
-            // arena_id, sport_id, court_id, booking_id left null — not collected in this form
-          }
-        ])
-        .select()   // plain select * — no join, no risk of column mismatch
+        .insert([insertPayload])
+        .select()
         .single();
 
       if (error) {
@@ -222,18 +309,89 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
             </div>
           </div>
 
-          {/* VENUE (display only — stored locally, no DB column) */}
+          {/* VENUE PICKER — live search from arenas table */}
           <div className="space-y-3 font-sans font-medium not-italic">
-            <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
-              <MapPin size={18} className="text-emerald-500" />
-              <input
-                disabled={loading}
-                placeholder="Venue Name (optional)"
-                className="bg-transparent outline-none flex-1 text-sm text-white font-bold placeholder:text-slate-600"
-                value={formData.venue}
-                onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
-              />
+            <div className="relative" ref={venueRef}>
+              <div
+                className={`bg-white/5 p-4 rounded-2xl flex items-center gap-3 border transition-all cursor-pointer ${
+                  venueOpen ? "border-emerald-500/50" : "border-white/5 hover:border-white/20"
+                }`}
+                onClick={() => { if (!loading) setVenueOpen(true); }}
+              >
+                <MapPin size={18} className="text-emerald-500 shrink-0" />
+                <input
+                  placeholder={userCity ? `Venues near ${userCity}...` : "Search venues..."}
+                  className="bg-transparent outline-none flex-1 text-sm text-white font-bold placeholder:text-slate-500 cursor-pointer"
+                  value={venueSearch}
+                  onChange={(e) => {
+                    setVenueSearch(e.target.value);
+                    setVenueOpen(true);
+                    if (!e.target.value) {
+                      setFormData({ ...formData, arenaId: null, arenaName: "" });
+                    }
+                  }}
+                  onFocus={() => setVenueOpen(true)}
+                  disabled={loading}
+                />
+                {venueLoading
+                  ? <Loader2 size={14} className="text-slate-500 animate-spin shrink-0" />
+                  : <ChevronDown size={14} className={`text-slate-500 shrink-0 transition-transform ${venueOpen ? "rotate-180" : ""}`} />
+                }
+              </div>
+
+              {/* DROPDOWN */}
+              <AnimatePresence>
+                {venueOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="absolute top-full mt-2 left-0 right-0 bg-[#0d1220] border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-50 max-h-52 overflow-y-auto no-scrollbar"
+                  >
+                    {venueLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-6 text-slate-500">
+                        <Loader2 size={14} className="animate-spin" />
+                        <span className="text-[10px] uppercase tracking-widest font-black">Searching...</span>
+                      </div>
+                    ) : venues.length === 0 ? (
+                      <div className="py-6 text-center">
+                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">No venues found</p>
+                        {userCity && (
+                          <p className="text-[9px] text-slate-600 mt-1">near {userCity}</p>
+                        )}
+                      </div>
+                    ) : (
+                      venues.map((venue, idx) => (
+                        <button
+                          key={venue.id}
+                          onClick={() => selectVenue(venue)}
+                          className={`w-full text-left px-5 py-4 flex items-center gap-3 hover:bg-emerald-500/10 transition-all border-b border-white/5 last:border-0 ${
+                            formData.arenaId === venue.id ? "bg-emerald-500/15" : ""
+                          }`}
+                        >
+                          <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                            formData.arenaId === venue.id ? "bg-emerald-500" : "bg-white/5"
+                          }`}>
+                            <MapPin size={12} className={formData.arenaId === venue.id ? "text-black" : "text-emerald-500"} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-white uppercase tracking-tight truncate">{venue.name}</p>
+                            {(venue.location || venue.city) && (
+                              <p className="text-[9px] text-slate-500 uppercase tracking-widest">{venue.location || venue.city}</p>
+                            )}
+                          </div>
+                          {formData.arenaId === venue.id && (
+                            <div className="ml-auto w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
+
+            {/* DATE */}
             <div className="bg-white/5 p-4 rounded-2xl flex items-center gap-3 border border-white/5 focus-within:border-emerald-500/50 transition-all">
               <Calendar size={18} className="text-emerald-500" />
               <input
