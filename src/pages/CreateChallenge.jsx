@@ -160,7 +160,21 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         throw error;
       }
 
-      if (onChallengeCreated) onChallengeCreated(data);
+      // Fetch user profile name so card shows it immediately without a page refresh
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", user.id)
+        .single();
+
+      // Attach the same joined shape that ChallengeMode expects
+      const enrichedMatch = {
+        ...data,
+        player: { name: profileData?.name || null },
+        arena:  { name: formData.arenaName || null },
+      };
+
+      if (onChallengeCreated) onChallengeCreated(enrichedMatch);
       onClose();
 
     } catch (error) {
