@@ -53,19 +53,17 @@ function CreateChallenge({ isOpen, onClose }) {
       // 2. Insert into Supabase
       // Note: Ensure your table name is 'lobby_appeals' 
       const { error } = await supabase
-        .from('lobby_appeals') 
-        .insert([
-          {
-            host_id: user.id,
-            sport: formData.sport,
-            mode: formData.mode,
-            needed_players: formData.mode === "Solo" ? 1 : formData.teamSize,
-            stakes: formData.stakes,
-            venue_name: formData.venue, 
-            scheduled_at: new Date(formData.date).toISOString(), // Ensure ISO format
-            status: 'open'
-          }
-        ]);
+  .from("matches")
+  .insert([
+    {
+      created_by: user.id,
+      match_type: "challenge",
+      status: "open",
+      match_time: new Date(formData.date).toISOString(),
+      max_players: formData.mode === "Solo" ? 2 : formData.teamSize * 2,
+      entry_points: formData.stakes
+    }
+  ]);
 
       if (error) {
         // This will tell you EXACTLY what is wrong in the console
