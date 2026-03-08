@@ -8,7 +8,7 @@ import {
   Edit3,
   Loader2
 } from "lucide-react";
-import { supabase } from "../supabaseClient"; 
+import { supabase } from "../lib/supabase";
 
 function CreateChallenge({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
