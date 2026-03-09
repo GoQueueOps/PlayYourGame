@@ -130,7 +130,6 @@ function ChallengeMode() {
           max_players,
           entry_points,
           arena_id,
-          player:profiles!matches_created_by_fkey ( name ),
           arena:arenas!matches_arena_fkey ( name )
         `)
         .like("match_type", "challenge_%")
@@ -138,7 +137,24 @@ function ChallengeMode() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setChallenges(data || []);
+
+      // ── Fetch profiles separately — matches_created_by_fkey → auth.users not profiles ──
+      const creatorIds = [...new Set((data || []).map((m) => m.created_by).filter(Boolean))];
+      let profileMap = {};
+      if (creatorIds.length > 0) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("id, name")
+          .in("id", creatorIds);
+        (profileData || []).forEach((p) => { profileMap[p.id] = p.name; });
+      }
+
+      // Attach player name to each match
+      const enriched = (data || []).map((m) => ({
+        ...m,
+        player: { name: profileMap[m.created_by] || null },
+      }));
+      setChallenges(enriched);
     } catch (err) {
       console.error("Fetch error:", err.message);
     } finally {

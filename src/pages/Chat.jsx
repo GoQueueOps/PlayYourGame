@@ -46,14 +46,25 @@ function Chat() {
         if (convError) throw convError;
         setMatchInfo(convData?.match || null);
 
-        // Fetch member profiles
+        // Fetch member user_ids first, then fetch profiles separately
         const { data: memberData, error: memberError } = await supabase
           .from("conversation_members")
-          .select("user_id, profile:profiles!conversation_members_user_id_fkey ( name )")
+          .select("user_id")
           .eq("conversation_id", conversationId);
 
         if (!memberError && memberData) {
-          setMembers(memberData);
+          const userIds = memberData.map((m) => m.user_id);
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("id, name")
+            .in("id", userIds);
+
+          // Merge user_id + name into members array
+          const enriched = memberData.map((m) => ({
+            user_id: m.user_id,
+            profile: profileData?.find((p) => p.id === m.user_id) || null,
+          }));
+          setMembers(enriched);
         }
 
         // Fetch existing messages
