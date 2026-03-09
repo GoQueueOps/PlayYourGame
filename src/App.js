@@ -48,7 +48,7 @@ import StandardProfile from "./pages/StandardProfile";
 import Inbox from "./pages/Inbox";
 import UniversalChat from "./pages/UniversalChat";
 import ProtectedRoute from "./components/ProtectedRoute";
-
+import Chat from "./pages/Chat";
 
 function LayoutContent() {
   const location = useLocation();
@@ -116,6 +116,7 @@ function LayoutContent() {
         <Route path="/standard-profile" element={<StandardProfile />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/chat/:type/:id" element={<UniversalChat />} />
+        <Route path="/chat" element={<Chat />} />
 
       </Routes>
       {!shouldHide && <Footer />}
