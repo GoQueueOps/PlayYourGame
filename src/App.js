@@ -116,7 +116,7 @@ function LayoutContent() {
         <Route path="/standard-profile" element={<StandardProfile />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/chat/:type/:id" element={<UniversalChat />} />
-        <Route path="/chat" element={<Chat />} />
+        <Route path="/chat/:id" element={<Chat />} />
 
       </Routes>
       {!shouldHide && <Footer />}
