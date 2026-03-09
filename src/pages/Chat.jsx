@@ -13,7 +13,7 @@ function Chat() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [members, setMembers] = useState([]); // other member profiles
+  const [members, setMembers] = useState([]);
   const [matchInfo, setMatchInfo] = useState(null);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -21,95 +21,89 @@ function Chat() {
   // ── Get current user ──
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setCurrentUserId(data?.session?.user?.id || null);
+      const uid = data?.session?.user?.id || null;
+      console.log("[Chat] currentUserId:", uid);
+      setCurrentUserId(uid);
     });
   }, []);
 
-  // ── Load conversation info, members, match details ──
+  // ── Load everything ──
   useEffect(() => {
     if (!conversationId) return;
+    console.log("[Chat] loading conversationId:", conversationId);
 
-    const loadConversation = async () => {
-      try {
-        // 1. Fetch basic conversation (no joins to avoid RLS issues)
-        const { data: convData, error: convError } = await supabase
-          .from("conversations")
-          .select("id, type, match_id")
-          .eq("id", conversationId)
+    const load = async () => {
+      setLoading(true);
+
+      // Step 1: conversation
+      const { data: conv, error: e1 } = await supabase
+        .from("conversations")
+        .select("id, type, match_id")
+        .eq("id", conversationId)
+        .single();
+      console.log("[Chat] conv:", conv, "err:", e1?.message);
+
+      // Step 2: match info
+      if (conv?.match_id) {
+        const { data: match, error: e2 } = await supabase
+          .from("matches")
+          .select("match_type, match_time, entry_points, arena_id")
+          .eq("id", conv.match_id)
           .single();
+        console.log("[Chat] match:", match, "err:", e2?.message);
 
-        if (convError) {
-          console.error("Conv fetch error:", convError.message);
-          // Don't throw — still show chat even without match info
-        }
-
-        // 2. Fetch match info separately if match_id exists
-        if (convData?.match_id) {
-          const { data: matchData } = await supabase
-            .from("matches")
-            .select("match_type, match_time, entry_points, arena_id")
-            .eq("id", convData.match_id)
+        if (match?.arena_id) {
+          const { data: arena, error: e3 } = await supabase
+            .from("arenas")
+            .select("name")
+            .eq("id", match.arena_id)
             .single();
-
-          if (matchData?.arena_id) {
-            const { data: arenaData } = await supabase
-              .from("arenas")
-              .select("name")
-              .eq("id", matchData.arena_id)
-              .single();
-            setMatchInfo({ ...matchData, arena: arenaData });
-          } else {
-            setMatchInfo(matchData || null);
-          }
+          console.log("[Chat] arena:", arena, "err:", e3?.message);
+          setMatchInfo({ ...match, arena });
+        } else {
+          setMatchInfo(match);
         }
-
-        // 3. Fetch members
-        const { data: memberData, error: memberError } = await supabase
-          .from("conversation_members")
-          .select("user_id")
-          .eq("conversation_id", conversationId);
-
-        if (memberError) {
-          console.error("Members fetch error:", memberError.message);
-        } else if (memberData && memberData.length > 0) {
-          const userIds = memberData.map((m) => m.user_id);
-          const { data: profileData, error: profileError } = await supabase
-            .from("profiles")
-            .select("id, name")
-            .in("id", userIds);
-
-          if (profileError) console.error("Profiles fetch error:", profileError.message);
-
-          const enriched = memberData.map((m) => ({
-            user_id: m.user_id,
-            profile: profileData?.find((p) => p.id === m.user_id) || null,
-          }));
-          setMembers(enriched);
-        }
-
-        // 4. Fetch existing messages
-        const { data: msgData, error: msgError } = await supabase
-          .from("group_messages")
-          .select("id, sender_id, message, created_at")
-          .eq("group_id", conversationId)
-          .order("created_at", { ascending: true });
-
-        if (msgError) {
-          console.error("Messages fetch error:", msgError.message);
-        }
-        setMessages(msgData || []);
-
-      } catch (err) {
-        console.error("Load conversation error:", err.message);
-      } finally {
-        setLoading(false);
       }
+
+      // Step 3: members
+      const { data: memberRows, error: e4 } = await supabase
+        .from("conversation_members")
+        .select("user_id")
+        .eq("conversation_id", conversationId);
+      console.log("[Chat] memberRows:", memberRows, "err:", e4?.message);
+
+      if (memberRows && memberRows.length > 0) {
+        const ids = memberRows.map((m) => m.user_id);
+        const { data: profiles, error: e5 } = await supabase
+          .from("profiles")
+          .select("id, name")
+          .in("id", ids);
+        console.log("[Chat] profiles:", profiles, "err:", e5?.message);
+
+        setMembers(
+          memberRows.map((m) => ({
+            user_id: m.user_id,
+            name: profiles?.find((p) => p.id === m.user_id)?.name || "Player",
+          }))
+        );
+      }
+
+      // Step 4: messages
+      const { data: msgs, error: e6 } = await supabase
+        .from("group_messages")
+        .select("id, sender_id, message, created_at")
+        .eq("group_id", conversationId)
+        .order("created_at", { ascending: true });
+      console.log("[Chat] msgs:", msgs, "err:", e6?.message);
+      setMessages(msgs || []);
+
+      setLoading(false);
     };
 
-    loadConversation();
+    load();
   }, [conversationId]);
 
-  // ── Realtime subscription for new messages ──
+  // ── Realtime ──
   useEffect(() => {
     if (!conversationId) return;
 
@@ -124,19 +118,21 @@ function Chat() {
           filter: `group_id=eq.${conversationId}`,
         },
         (payload) => {
+          console.log("[Chat] realtime msg:", payload.new);
           setMessages((prev) => {
-            // Avoid duplicates
             if (prev.find((m) => m.id === payload.new.id)) return prev;
             return [...prev, payload.new];
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[Chat] realtime status:", status);
+      });
 
     return () => supabase.removeChannel(channel);
   }, [conversationId]);
 
-  // ── Scroll to bottom on new messages ──
+  // ── Scroll to bottom ──
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -158,8 +154,8 @@ function Chat() {
       });
 
     if (error) {
-      console.error("Send error:", error.message);
-      setNewMessage(text); // restore on error
+      console.error("[Chat] send error:", error.message);
+      setNewMessage(text);
     }
 
     setSending(false);
@@ -173,40 +169,34 @@ function Chat() {
     }
   };
 
-  // ── Helpers ──
-  const getNameForUser = (userId) => {
-    const member = members.find((m) => m.user_id === userId);
-    return member?.profile?.name || "Player";
-  };
-
   const getOpponentName = () => {
     const opponent = members.find((m) => m.user_id !== currentUserId);
-    return opponent?.profile?.name || "Opponent";
+    return opponent?.name || "Opponent";
   };
 
-  const formatTime = (dateStr) => {
-    return new Date(dateStr).toLocaleTimeString("en-IN", {
-      hour: "2-digit", minute: "2-digit"
-    });
+  const getNameForUser = (userId) => {
+    return members.find((m) => m.user_id === userId)?.name || "Player";
   };
+
+  const formatTime = (dateStr) =>
+    new Date(dateStr).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
   const formatMatchTime = (dateStr) => {
     if (!dateStr) return "TBD";
     return new Date(dateStr).toLocaleString("en-IN", {
       weekday: "short", day: "numeric", month: "short",
-      hour: "2-digit", minute: "2-digit"
+      hour: "2-digit", minute: "2-digit",
     });
   };
 
-  const parseMatchType = (matchType = "") => {
-    const parts = matchType.split("_");
-    return parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : "Match";
+  const parseMatchType = (mt = "") => {
+    const p = mt.split("_");
+    return p[1] ? p[1].charAt(0).toUpperCase() + p[1].slice(1) : "Match";
   };
 
-  // ── Group messages by date ──
   const groupedMessages = messages.reduce((acc, msg) => {
     const date = new Date(msg.created_at).toLocaleDateString("en-IN", {
-      day: "numeric", month: "short", year: "numeric"
+      day: "numeric", month: "short", year: "numeric",
     });
     if (!acc[date]) acc[date] = [];
     acc[date].push(msg);
@@ -215,21 +205,14 @@ function Chat() {
 
   return (
     <div className="min-h-screen bg-[#020617] text-white flex flex-col font-sans">
-
-      {/* ── AMBIENT GLOW ── */}
       <div className="fixed top-0 left-1/4 w-[500px] h-[500px] bg-emerald-500/5 blur-[150px] rounded-full pointer-events-none z-0" />
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <header className="sticky top-0 z-20 bg-[#020617]/90 backdrop-blur-xl border-b border-white/5 px-4 py-4">
         <div className="max-w-2xl mx-auto flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2.5 bg-white/5 border border-white/10 rounded-2xl active:scale-90 transition-all"
-          >
+          <button onClick={() => navigate(-1)} className="p-2.5 bg-white/5 border border-white/10 rounded-2xl active:scale-90 transition-all">
             <ChevronLeft size={20} />
           </button>
-
-          {/* Opponent avatar + name */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
               <Swords size={16} className="text-emerald-400" />
@@ -246,7 +229,7 @@ function Chat() {
         </div>
       </header>
 
-      {/* ── MATCH INFO BANNER ── */}
+      {/* MATCH INFO BANNER */}
       {matchInfo && (
         <div className="sticky top-[73px] z-10 bg-[#0b0f1a]/80 backdrop-blur-sm border-b border-white/5">
           <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-6 overflow-x-auto no-scrollbar">
@@ -284,7 +267,7 @@ function Chat() {
         </div>
       )}
 
-      {/* ── MESSAGES ── */}
+      {/* MESSAGES */}
       <main className="flex-1 overflow-y-auto px-4 py-6 relative z-10">
         <div className="max-w-2xl mx-auto space-y-6">
           {loading ? (
@@ -309,19 +292,15 @@ function Chat() {
           ) : (
             Object.entries(groupedMessages).map(([date, msgs]) => (
               <div key={date}>
-                {/* Date separator */}
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex-1 h-px bg-white/5" />
                   <span className="text-[9px] text-slate-600 uppercase tracking-widest font-black">{date}</span>
                   <div className="flex-1 h-px bg-white/5" />
                 </div>
-
                 <div className="space-y-2">
                   <AnimatePresence initial={false}>
                     {msgs.map((msg) => {
                       const isOwn = msg.sender_id === currentUserId;
-                      const senderName = getNameForUser(msg.sender_id);
-
                       return (
                         <motion.div
                           key={msg.id}
@@ -330,20 +309,17 @@ function Chat() {
                           transition={{ duration: 0.15 }}
                           className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                         >
-                          <div className={`max-w-[75%] ${isOwn ? "items-end" : "items-start"} flex flex-col gap-1`}>
+                          <div className={`max-w-[75%] flex flex-col gap-1 ${isOwn ? "items-end" : "items-start"}`}>
                             {!isOwn && (
                               <span className="text-[9px] text-slate-500 uppercase tracking-widest font-black px-2">
-                                {senderName}
+                                {getNameForUser(msg.sender_id)}
                               </span>
                             )}
-                            <div
-                              className={`px-4 py-3 rounded-2xl text-sm font-semibold leading-relaxed ${
-                                isOwn
-                                  ? "bg-emerald-500 text-black rounded-br-sm"
-                                  : "bg-white/8 border border-white/8 text-white rounded-bl-sm"
-                              }`}
-                              style={!isOwn ? { background: "rgba(255,255,255,0.06)" } : {}}
-                            >
+                            <div className={`px-4 py-3 rounded-2xl text-sm font-semibold leading-relaxed ${
+                              isOwn
+                                ? "bg-emerald-500 text-black rounded-br-sm"
+                                : "bg-white/[0.06] border border-white/[0.08] text-white rounded-bl-sm"
+                            }`}>
                               {msg.message}
                             </div>
                             <span className="text-[8px] text-slate-600 px-2 font-bold">
@@ -362,7 +338,7 @@ function Chat() {
         </div>
       </main>
 
-      {/* ── INPUT BAR ── */}
+      {/* INPUT */}
       <div className="sticky bottom-0 z-20 bg-[#020617]/90 backdrop-blur-xl border-t border-white/5 px-4 py-4">
         <div className="max-w-2xl mx-auto flex items-center gap-3">
           <input
@@ -380,14 +356,10 @@ function Chat() {
             disabled={!newMessage.trim() || sending || loading}
             className="w-14 h-14 bg-emerald-500 text-black rounded-2xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-lg shadow-emerald-500/20"
           >
-            {sending
-              ? <Loader2 size={18} className="animate-spin" />
-              : <Send size={18} strokeWidth={2.5} />
-            }
+            {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} strokeWidth={2.5} />}
           </button>
         </div>
       </div>
-
     </div>
   );
 }
