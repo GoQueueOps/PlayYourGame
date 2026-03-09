@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
+import {
   Trophy, Swords, Gamepad2,
-  ChevronLeft, Medal, Star, Target, Users, User, Plus, 
-  ChevronRight, Loader2 
-} from "lucide-react"; 
+  ChevronLeft, Medal, Star, Target, Users, User, Plus,
+  ChevronRight, Loader2, CheckCircle2
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import CreateChallenge from "../pages/CreateChallenge"; 
+import CreateChallenge from "../pages/CreateChallenge";
 import { supabase } from "../lib/supabase";
 
-// Parses "challenge_football_solo" → { sport: "Football", mode: "Solo" }
 function parseMatchType(matchType = "") {
   const parts = matchType.split("_");
   const sport = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : "Sport";
@@ -17,7 +16,6 @@ function parseMatchType(matchType = "") {
   return { sport, mode };
 }
 
-// --- ARENA LEGENDS SECTION ---
 function ArenaLegendsSection() {
   const navigate = useNavigate();
   const [boardType, setBoardType] = useState("Lobby");
@@ -50,10 +48,10 @@ function ArenaLegendsSection() {
             <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
           <div className="flex bg-[#0b0f1a] p-1 rounded-2xl border border-white/10 italic">
-            <button onClick={() => setBoardType("Solo")} className={`px-6 py-2.5 rounded-xl text-[10px] transition-all ${boardType === 'Solo' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`}>
+            <button onClick={() => setBoardType("Solo")} className={`px-6 py-2.5 rounded-xl text-[10px] transition-all ${boardType === "Solo" ? "bg-white text-black shadow-lg" : "text-slate-500"}`}>
               <User size={14} className="mr-2 inline" />Solo
             </button>
-            <button onClick={() => setBoardType("Lobby")} className={`px-6 py-2.5 rounded-xl text-[10px] transition-all ${boardType === 'Lobby' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`}>
+            <button onClick={() => setBoardType("Lobby")} className={`px-6 py-2.5 rounded-xl text-[10px] transition-all ${boardType === "Lobby" ? "bg-white text-black shadow-lg" : "text-slate-500"}`}>
               <Users size={14} className="mr-2 inline" />Lobby
             </button>
           </div>
@@ -100,25 +98,31 @@ function ArenaLegendsSection() {
   );
 }
 
-// --- MAIN CHALLENGE MODE ---
 function ChallengeMode() {
   const navigate = useNavigate();
   const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlab, setSelectedSlab] = useState("All");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [acceptingId, setAcceptingId] = useState(null); // track which card is loading
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  // ── Get current user on mount ──
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data?.session?.user?.id || null);
+    });
+  }, []);
 
   const fetchChallenges = async () => {
     try {
       setLoading(true);
-
-      // ── Join profiles for player name, arenas for venue name ──
-      // Using FK hint to avoid ambiguity (matches has two FKs to profiles/auth.users)
       const { data, error } = await supabase
         .from("matches")
         .select(`
           id,
           created_by,
+          accepted_by,
           match_type,
           status,
           match_time,
@@ -145,8 +149,75 @@ function ChallengeMode() {
   useEffect(() => { fetchChallenges(); }, []);
 
   const handleChallengeCreated = (newMatch) => {
-    // newMatch already has player & arena attached by CreateChallenge
     setChallenges((prev) => [newMatch, ...prev]);
+  };
+
+  // ── Accept Challenge ──
+  const handleAccept = async (match) => {
+    if (!currentUserId) {
+      alert("Please login to accept a challenge.");
+      return;
+    }
+
+    // Prevent creator from accepting their own challenge
+    if (match.created_by === currentUserId) {
+      alert("You cannot accept your own challenge.");
+      return;
+    }
+
+    try {
+      setAcceptingId(match.id);
+
+      // 1. Update match status to accepted + set accepted_by
+      const { error: matchError } = await supabase
+        .from("matches")
+        .update({ status: "accepted", accepted_by: currentUserId })
+        .eq("id", match.id)
+        .eq("status", "open"); // safety: only accept if still open
+
+      if (matchError) throw matchError;
+
+      // 2. Add accepter to match_players
+      const { error: playerError } = await supabase
+        .from("match_players")
+        .insert({ match_id: match.id, user_id: currentUserId, team: 2 });
+
+      // Ignore duplicate error (in case already inserted)
+      if (playerError && !playerError.message.includes("unique")) {
+        throw playerError;
+      }
+
+      // 3. Create conversation linked to this match
+      const { data: convData, error: convError } = await supabase
+        .from("conversations")
+        .insert({ match_id: match.id, type: "challenge" })
+        .select()
+        .single();
+
+      if (convError) throw convError;
+
+      // 4. Add both players as conversation members
+      const { error: membersError } = await supabase
+        .from("conversation_members")
+        .insert([
+          { conversation_id: convData.id, user_id: match.created_by },
+          { conversation_id: convData.id, user_id: currentUserId },
+        ]);
+
+      if (membersError && !membersError.message.includes("unique")) {
+        throw membersError;
+      }
+
+      // 5. Remove from local list + navigate to chat
+      setChallenges((prev) => prev.filter((c) => c.id !== match.id));
+      navigate(`/chat/${convData.id}`);
+
+    } catch (err) {
+      console.error("Accept error:", err.message);
+      alert("Failed to accept challenge: " + err.message);
+    } finally {
+      setAcceptingId(null);
+    }
   };
 
   const formatMatchTime = (dateStr) => {
@@ -230,6 +301,8 @@ function ChallengeMode() {
               const { sport, mode } = parseMatchType(match.match_type);
               const playerName = match.player?.name || "Unknown";
               const arenaName  = match.arena?.name  || "TBD";
+              const isOwnChallenge = match.created_by === currentUserId;
+              const isAccepting = acceptingId === match.id;
 
               return (
                 <motion.div
@@ -242,15 +315,20 @@ function ChallengeMode() {
                 >
                   <div className="flex justify-between items-start mb-10">
                     <div className="space-y-1">
-                      <span className="px-3 py-1 rounded-full text-[9px] border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-                        {sport}
-                      </span>
-                      {/* ── Real player name from profiles join ── */}
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-full text-[9px] border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                          {sport}
+                        </span>
+                        {isOwnChallenge && (
+                          <span className="px-3 py-1 rounded-full text-[9px] border bg-orange-500/10 text-orange-400 border-orange-500/20">
+                            Yours
+                          </span>
+                        )}
+                      </div>
                       <h3 className="text-3xl mt-2 text-white">{playerName}</h3>
                       <p className="text-[10px] text-slate-500">{mode}</p>
                     </div>
 
-                    {/* G-Points badge */}
                     <div className="text-right">
                       <div className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-100 px-4 py-2 rounded-xl text-sm shadow-xl">
                         <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
@@ -266,7 +344,6 @@ function ChallengeMode() {
                   <div className="grid grid-cols-2 gap-4 mb-8">
                     <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
                       <p className="text-[8px] text-slate-500 mb-1">Venue</p>
-                      {/* ── Real arena name from arenas join ── */}
                       <p className="text-[11px] truncate text-white">{arenaName}</p>
                     </div>
                     <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
@@ -275,9 +352,29 @@ function ChallengeMode() {
                     </div>
                   </div>
 
-                  <button className="w-full bg-emerald-500 text-black py-5 rounded-2xl text-xs tracking-[0.2em] hover:bg-white transition-all active:scale-95">
-                    Accept Challenge »
-                  </button>
+                  {isOwnChallenge ? (
+                    // Creator sees a disabled "Waiting" button
+                    <button
+                      disabled
+                      className="w-full bg-white/5 border border-white/10 text-slate-500 py-5 rounded-2xl text-xs tracking-[0.2em] cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Loader2 size={14} className="animate-spin" />
+                      Waiting for Opponent...
+                    </button>
+                  ) : (
+                    // Others see the Accept button
+                    <button
+                      onClick={() => handleAccept(match)}
+                      disabled={isAccepting}
+                      className="w-full bg-emerald-500 text-black py-5 rounded-2xl text-xs tracking-[0.2em] hover:bg-white transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                    >
+                      {isAccepting ? (
+                        <><Loader2 size={14} className="animate-spin" /> Accepting...</>
+                      ) : (
+                        <><CheckCircle2 size={14} /> Accept Challenge »</>
+                      )}
+                    </button>
+                  )}
                 </motion.div>
               );
             })}
