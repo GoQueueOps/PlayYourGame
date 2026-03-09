@@ -8,7 +8,7 @@ function Login() {
 
   const [loginMethod, setLoginMethod] = useState("phone");
   const [otpSent, setOtpSent] = useState(false);
-  const [emailExists, setEmailExists] = useState(true); // default to login
+  const [emailExists, setEmailExists] = useState(true);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,13 +42,28 @@ function Login() {
   // ─── EMAIL AUTH FLOW ────────────────────────────────
 
   const handleEmailAction = async () => {
-  setLoading(true);
+    setLoading(true);
 
-  if (emailExists) {
-    // 🔐 LOGIN
-    const { error } = await supabase.auth.signInWithPassword({
+    if (emailExists) {
+      // 🔐 LOGIN
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        alert(error.message);
+        setLoading(false);
+        return;
+      }
+      navigate("/");
+      setLoading(false);
+      return;
+    }
+
+    // 🆕 SIGNUP
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: { name: fullName }, // ← was full_name, profiles table uses 'name'
+      },
     });
 
     if (error) {
@@ -57,50 +72,31 @@ function Login() {
       return;
     }
 
+    if (data?.user) {
+      // ── Insert only columns that exist in your profiles table ──
+      // Schema: id, created_date, name, city, state, country, last_name_change, athlete_id
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert([
+          {
+            id: data.user.id,  // FK → auth.users.id
+            name: fullName,    // ← was full_name (column does not exist)
+            city: "",
+            state: "",
+            country: "",
+          },
+        ]);
+
+      if (profileError) {
+        console.error("Profile insert error:", profileError.message);
+        // Don't block the user — auth account was created successfully
+      }
+    }
+
+    alert("Account created! Check your email to confirm.");
     navigate("/");
     setLoading(false);
-    return;
-  }
-
-  // 🆕 SIGNUP
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
-      },
-    },
-  });
-
-  if (error) {
-    alert(error.message);
-    setLoading(false);
-    return;
-  }
-
-  if (data?.user) {
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .insert([
-        {
-          id: data.user.id,
-          full_name: fullName,
-          city: "",
-          state: "",
-          country: "",
-        },
-      ]);
-
-    if (profileError) {
-      console.error("Profile insert error:", profileError.message);
-    }
-  }
-
-  alert("Account created successfully!");
-  navigate("/");
-  setLoading(false);
-};
+  };
 
   // ─── SOCIAL AUTH ────────────────────────────────────
 
@@ -132,7 +128,6 @@ function Login() {
           overflow: hidden;
         }
 
-        /* Ambient glow blobs */
         .login-root::before {
           content: '';
           position: fixed;
@@ -164,7 +159,6 @@ function Login() {
           z-index: 1;
         }
 
-        /* ── Hero Title ── */
         .hero-title {
           font-family: 'Bebas Neue', sans-serif;
           font-size: 72px;
@@ -193,7 +187,6 @@ function Login() {
           margin-top: 10px;
         }
 
-        /* ── Glass Field ── */
         .field-label {
           font-size: 9px;
           font-weight: 700;
@@ -232,7 +225,6 @@ function Login() {
           font-weight: 900;
         }
 
-        /* ── Pill toggle for login / signup ── */
         .tab-pill {
           display: flex;
           background: rgba(255,255,255,0.04);
@@ -266,7 +258,6 @@ function Login() {
           box-shadow: 0 4px 16px rgba(59,130,246,0.3);
         }
 
-        /* ── Primary CTAs ── */
         .btn-primary-green {
           width: 100%;
           background: linear-gradient(135deg, #22c55e, #16a34a);
@@ -291,7 +282,7 @@ function Login() {
           pointer-events: none;
         }
         .btn-primary-green:active { transform: scale(0.97); }
-        .btn-primary-green:disabled { opacity: 0.4; }
+        .btn-primary-green:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .btn-primary-blue {
           width: 100%;
@@ -317,6 +308,7 @@ function Login() {
           pointer-events: none;
         }
         .btn-primary-blue:active { transform: scale(0.97); }
+        .btn-primary-blue:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .btn-ghost {
           background: transparent;
@@ -333,7 +325,6 @@ function Login() {
         }
         .btn-ghost:hover { color: #9ca3af; }
 
-        /* ── Divider ── */
         .divider-wrap {
           display: flex;
           align-items: center;
@@ -352,7 +343,6 @@ function Login() {
           color: #1f2937;
         }
 
-        /* ── Alt buttons ── */
         .alt-btn {
           background: rgba(255,255,255,0.04);
           border: 1px solid rgba(255,255,255,0.08);
@@ -376,7 +366,6 @@ function Login() {
           color: #6b7280;
         }
 
-        /* ── Business Portal ── */
         .biz-card {
           background: rgba(255,255,255,0.03);
           border: 1px solid rgba(255,255,255,0.05);
@@ -410,7 +399,6 @@ function Login() {
         .biz-btn.admin { color: #c084fc; }
         .biz-btn.admin:hover { background: rgba(192,132,252,0.1); }
 
-        /* ── Phone prefix box ── */
         .prefix-box {
           background: rgba(255,255,255,0.05);
           border: 1px solid rgba(255,255,255,0.08);
@@ -474,11 +462,7 @@ function Login() {
                         />
                       </div>
                     </div>
-                    <button
-                      disabled={loading}
-                      onClick={handleSendOTP}
-                      className="btn-primary-green"
-                    >
+                    <button disabled={loading} onClick={handleSendOTP} className="btn-primary-green">
                       {loading ? "Sending..." : "Send OTP →"}
                     </button>
                   </>
@@ -495,8 +479,8 @@ function Login() {
                         className="glass-input otp-input"
                       />
                     </div>
-                    <button onClick={handleVerifyOTP} className="btn-primary-green">
-                      Verify &amp; Login
+                    <button onClick={handleVerifyOTP} disabled={loading} className="btn-primary-green">
+                      {loading ? "Verifying..." : "Verify & Login"}
                     </button>
                     <button onClick={() => setOtpSent(false)} className="btn-ghost">
                       ← Change Number
@@ -573,9 +557,10 @@ function Login() {
 
                 <button
                   onClick={handleEmailAction}
+                  disabled={loading}
                   className={emailExists === false ? "btn-primary-blue" : "btn-primary-green"}
                 >
-                  {emailExists === false ? "Create Account" : "Continue →"}
+                  {loading ? "Please wait..." : emailExists === false ? "Create Account" : "Continue →"}
                 </button>
               </motion.div>
             )}
@@ -597,7 +582,7 @@ function Login() {
                 onClick={() => {
                   setLoginMethod(loginMethod === "phone" ? "email" : "phone");
                   setOtpSent(false);
-                  setEmailExists(true); // reset to login tab when toggling
+                  setEmailExists(true);
                 }}
                 className="alt-btn"
               >
