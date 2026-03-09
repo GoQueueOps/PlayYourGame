@@ -31,35 +31,55 @@ function Chat() {
 
     const loadConversation = async () => {
       try {
-        // Fetch conversation + match info
+        // 1. Fetch basic conversation (no joins to avoid RLS issues)
         const { data: convData, error: convError } = await supabase
           .from("conversations")
-          .select(`
-            id, type, match_id,
-            match:matches ( match_type, match_time, entry_points, arena_id,
-              arena:arenas!matches_arena_fkey ( name )
-            )
-          `)
+          .select("id, type, match_id")
           .eq("id", conversationId)
           .single();
 
-        if (convError) throw convError;
-        setMatchInfo(convData?.match || null);
+        if (convError) {
+          console.error("Conv fetch error:", convError.message);
+          // Don't throw — still show chat even without match info
+        }
 
-        // Fetch member user_ids first, then fetch profiles separately
+        // 2. Fetch match info separately if match_id exists
+        if (convData?.match_id) {
+          const { data: matchData } = await supabase
+            .from("matches")
+            .select("match_type, match_time, entry_points, arena_id")
+            .eq("id", convData.match_id)
+            .single();
+
+          if (matchData?.arena_id) {
+            const { data: arenaData } = await supabase
+              .from("arenas")
+              .select("name")
+              .eq("id", matchData.arena_id)
+              .single();
+            setMatchInfo({ ...matchData, arena: arenaData });
+          } else {
+            setMatchInfo(matchData || null);
+          }
+        }
+
+        // 3. Fetch members
         const { data: memberData, error: memberError } = await supabase
           .from("conversation_members")
           .select("user_id")
           .eq("conversation_id", conversationId);
 
-        if (!memberError && memberData) {
+        if (memberError) {
+          console.error("Members fetch error:", memberError.message);
+        } else if (memberData && memberData.length > 0) {
           const userIds = memberData.map((m) => m.user_id);
-          const { data: profileData } = await supabase
+          const { data: profileData, error: profileError } = await supabase
             .from("profiles")
             .select("id, name")
             .in("id", userIds);
 
-          // Merge user_id + name into members array
+          if (profileError) console.error("Profiles fetch error:", profileError.message);
+
           const enriched = memberData.map((m) => ({
             user_id: m.user_id,
             profile: profileData?.find((p) => p.id === m.user_id) || null,
@@ -67,15 +87,18 @@ function Chat() {
           setMembers(enriched);
         }
 
-        // Fetch existing messages
+        // 4. Fetch existing messages
         const { data: msgData, error: msgError } = await supabase
-          .from("group_message")
+          .from("group_messages")
           .select("id, sender_id, message, created_at")
           .eq("group_id", conversationId)
           .order("created_at", { ascending: true });
 
-        if (msgError) throw msgError;
+        if (msgError) {
+          console.error("Messages fetch error:", msgError.message);
+        }
         setMessages(msgData || []);
+
       } catch (err) {
         console.error("Load conversation error:", err.message);
       } finally {
@@ -97,7 +120,7 @@ function Chat() {
         {
           event: "INSERT",
           schema: "public",
-          table: "group_message",
+          table: "group_messages",
           filter: `group_id=eq.${conversationId}`,
         },
         (payload) => {
@@ -127,7 +150,7 @@ function Chat() {
     setNewMessage("");
 
     const { error } = await supabase
-      .from("group_message")
+      .from("group_messages")
       .insert({
         group_id: conversationId,
         sender_id: currentUserId,
