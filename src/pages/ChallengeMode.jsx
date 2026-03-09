@@ -203,30 +203,22 @@ function ChallengeMode() {
         throw playerError;
       }
 
-      // 3. Create conversation linked to this match
-      const { data: convData, error: convError } = await supabase
-        .from("conversations")
-        .insert({ type: "challenge" })
-        .select()
-        .single();
+      // 3 & 4. Create conversation + add both members via security definer function
+      const { data: convId, error: convError } = await supabase
+        .rpc("create_challenge_conversation", {
+          p_match_id: match.id,
+          p_challenger_id: match.created_by,
+          p_accepter_id: currentUserId,
+        });
 
-      if (convError) throw convError;
-
-      // 4. Add both players as conversation members
-      const { error: membersError } = await supabase
-        .from("conversation_members")
-        .insert([
-          { conversation_id: convData.id, user_id: match.created_by },
-          { conversation_id: convData.id, user_id: currentUserId },
-        ]);
-
-      if (membersError && !membersError.message.includes("unique")) {
-        throw membersError;
+      if (convError) {
+        console.error("Conv error:", JSON.stringify(convError));
+        throw convError;
       }
 
       // 5. Remove from local list + navigate to chat
       setChallenges((prev) => prev.filter((c) => c.id !== match.id));
-      navigate(`/chat/${convData.id}`);
+      navigate(`/chat/${convId}`);
 
     } catch (err) {
       console.error("Accept error:", err.message);
