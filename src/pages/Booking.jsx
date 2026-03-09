@@ -211,7 +211,4 @@ function Booking() {
         </button>
       )}
     </div>
-  );
-}
-
-export default Booking;
+  
