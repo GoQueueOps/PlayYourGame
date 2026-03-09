@@ -206,7 +206,7 @@ function ChallengeMode() {
       // 3. Create conversation linked to this match
       const { data: convData, error: convError } = await supabase
         .from("conversations")
-        .insert({ match_id: match.id, type: "challenge" })
+        .insert({ type: "challenge" })
         .select()
         .single();
 
