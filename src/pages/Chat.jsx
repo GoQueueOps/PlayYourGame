@@ -77,7 +77,8 @@ function BookCourtModal({ match, conversationId, currentUserId, members, onClose
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [match?.id, isChallenger]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match?.id, isChallenger, onBooked]);
 
   const handlePay = async () => {
     setPaying(true);
