@@ -7,11 +7,12 @@ import {
   Calendar,
   Edit3,
   Loader2,
-  ChevronDown
+  ChevronDown,
+  AlertCircle
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
-function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
+function CreateChallenge({ isOpen, onClose, onChallengeCreated, gPointsBalance = null }) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     sport: "Football",
@@ -68,12 +69,9 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           .select("id, name, location, city")
           .order("name");
 
-        // Filter by user's city if detected
         if (userCity) {
           query = query.ilike("location", `%${userCity}%`);
         }
-
-        // Further filter by search text
         if (venueSearch.trim()) {
           query = query.ilike("name", `%${venueSearch.trim()}%`);
         }
@@ -106,6 +104,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
   if (!isOpen) return null;
 
   const winnerAmount = formData.stakes * 2;
+  const canAfford = gPointsBalance === null || gPointsBalance >= formData.stakes;
 
   const handleCustomStakes = (value) => {
     const numValue = parseInt(value) || 0;
@@ -121,6 +120,12 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
   const handleDeploy = async () => {
     if (!formData.date) {
       alert("PLEASE SELECT A DATE");
+      return;
+    }
+
+    // ── G-Points balance check ──
+    if (gPointsBalance !== null && gPointsBalance < formData.stakes) {
+      alert(`Insufficient G-Points. You need ${formData.stakes} G-PTS but only have ${gPointsBalance} G-PTS. Top up your wallet first.`);
       return;
     }
 
@@ -144,7 +149,6 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         entry_points: formData.stakes,
       };
 
-      // Only add arena_id if user picked one
       if (formData.arenaId) {
         insertPayload.arena_id = formData.arenaId;
       }
@@ -160,14 +164,12 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         throw error;
       }
 
-      // Fetch user profile name so card shows it immediately without a page refresh
       const { data: profileData } = await supabase
         .from("profiles")
         .select("name")
         .eq("id", user.id)
         .single();
 
-      // Attach the same joined shape that ChallengeMode expects
       const enrichedMatch = {
         ...data,
         player: { name: profileData?.name || null },
@@ -203,16 +205,37 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
         >
           {/* HEADER */}
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl uppercase tracking-tighter italic text-white">
-              Launch <span className="text-emerald-500">Challenge</span>
-            </h2>
-            <button
-              onClick={onClose}
-              disabled={loading}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
-            >
-              <X size={20} className="text-white" />
-            </button>
+            <div>
+              <h2 className="text-2xl uppercase tracking-tighter italic text-white">
+                Launch <span className="text-emerald-500">Challenge</span>
+              </h2>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* G-Points Balance Badge */}
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border ${
+                canAfford
+                  ? "bg-emerald-500/10 border-emerald-500/20"
+                  : "bg-red-500/10 border-red-500/20"
+              }`}>
+                <Gamepad2
+                  size={12}
+                  className={canAfford ? "text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "text-red-400"}
+                />
+                <div>
+                  <p className="text-[7px] text-slate-500 tracking-widest leading-none mb-0.5">Balance</p>
+                  <p className={`text-xs font-black leading-none ${canAfford ? "text-emerald-400" : "text-red-400"}`}>
+                    {gPointsBalance === null ? "..." : `${gPointsBalance} G`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                disabled={loading}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
+              >
+                <X size={20} className="text-white" />
+              </button>
+            </div>
           </div>
 
           {/* SPORT SELECTION */}
@@ -275,30 +298,58 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           )}
 
           {/* STAKES */}
-          <div className="bg-black/20 p-6 rounded-3xl border border-emerald-500/10 space-y-4">
-            <div className="flex items-center gap-2">
-              <Gamepad2 size={13} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
-              <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Stakes (G-Points)</p>
+          <div className={`bg-black/20 p-6 rounded-3xl border space-y-4 transition-all ${
+            canAfford ? "border-emerald-500/10" : "border-red-500/20"
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Gamepad2 size={13} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Stakes (G-Points)</p>
+              </div>
+
+              {/* Balance indicator next to stakes label */}
+              {gPointsBalance !== null && (
+                <div className="flex items-center gap-1.5">
+                  {!canAfford && <AlertCircle size={11} className="text-red-400" />}
+                  <span className={`text-[9px] font-black tracking-widest ${canAfford ? "text-slate-500" : "text-red-400"}`}>
+                    {canAfford
+                      ? `${gPointsBalance - formData.stakes} G LEFT AFTER`
+                      : `NEED ${formData.stakes - gPointsBalance} MORE G`}
+                  </span>
+                </div>
+              )}
             </div>
+
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-              {[20, 50, 100].map((pts) => (
-                <button
-                  key={pts}
-                  disabled={loading}
-                  onClick={() => setFormData({ ...formData, stakes: pts })}
-                  className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
-                    formData.stakes === pts
-                      ? "bg-emerald-500 text-black border-emerald-400 scale-105 shadow-xl"
-                      : "bg-white/5 text-slate-500 border-white/5 opacity-50"
-                  }`}
-                >
-                  <Gamepad2
-                    size={13}
-                    className={formData.stakes === pts ? "text-black" : "text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]"}
-                  />
-                  <span className="text-xs mt-0.5">{pts}</span>
-                </button>
-              ))}
+              {[20, 50, 100].map((pts) => {
+                const affordable = gPointsBalance === null || gPointsBalance >= pts;
+                return (
+                  <button
+                    key={pts}
+                    disabled={loading}
+                    onClick={() => setFormData({ ...formData, stakes: pts })}
+                    className={`min-w-[60px] h-[60px] rounded-2xl flex flex-col items-center justify-center font-black transition-all border ${
+                      formData.stakes === pts
+                        ? affordable
+                          ? "bg-emerald-500 text-black border-emerald-400 scale-105 shadow-xl"
+                          : "bg-red-500 text-white border-red-400 scale-105 shadow-xl"
+                        : affordable
+                          ? "bg-white/5 text-slate-500 border-white/5 opacity-50"
+                          : "bg-white/5 text-red-500/40 border-red-500/10 opacity-40"
+                    }`}
+                  >
+                    <Gamepad2
+                      size={13}
+                      className={
+                        formData.stakes === pts
+                          ? affordable ? "text-black" : "text-white"
+                          : "text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+                      }
+                    />
+                    <span className="text-xs mt-0.5">{pts}</span>
+                  </button>
+                );
+              })}
               <div className={`relative min-w-[120px] h-[60px] rounded-2xl border flex items-center px-4 ${![20, 50, 100].includes(formData.stakes) ? "bg-emerald-500/10 border-emerald-500" : "bg-white/5 border-white/5"}`}>
                 <Edit3 size={14} className="text-emerald-400 mr-2 shrink-0" />
                 <input
@@ -311,6 +362,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                 />
               </div>
             </div>
+
             <div className="flex justify-between items-center pt-1">
               <span className="text-[9px] text-slate-500 uppercase italic">Prize Pool</span>
               <div className="flex items-center gap-1.5">
@@ -320,9 +372,23 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                 </p>
               </div>
             </div>
+
+            {/* Insufficient balance warning */}
+            {gPointsBalance !== null && !canAfford && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3"
+              >
+                <AlertCircle size={13} className="text-red-400 shrink-0" />
+                <p className="text-[9px] text-red-400 uppercase tracking-widest">
+                  Insufficient G-Points — Top up your wallet to deploy this challenge
+                </p>
+              </motion.div>
+            )}
           </div>
 
-          {/* VENUE PICKER — live search from arenas table */}
+          {/* VENUE PICKER */}
           <div className="space-y-3 font-sans font-medium not-italic">
             <div className="relative" ref={venueRef}>
               <div
@@ -352,7 +418,6 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                 }
               </div>
 
-              {/* DROPDOWN */}
               <AnimatePresence>
                 {venueOpen && (
                   <motion.div
@@ -374,7 +439,7 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
                         )}
                       </div>
                     ) : (
-                      venues.map((venue, idx) => (
+                      venues.map((venue) => (
                         <button
                           key={venue.id}
                           onClick={() => selectVenue(venue)}
@@ -420,10 +485,20 @@ function CreateChallenge({ isOpen, onClose, onChallengeCreated }) {
           {/* LAUNCH */}
           <button
             onClick={handleDeploy}
-            disabled={loading}
-            className="w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+            disabled={loading || !canAfford}
+            className={`w-full py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed ${
+              canAfford
+                ? "bg-emerald-500 text-black"
+                : "bg-red-500/20 text-red-400 border border-red-500/30"
+            }`}
           >
-            {loading ? <Loader2 className="animate-spin" size={18} /> : "Deploy Challenge"}
+            {loading ? (
+              <><Loader2 className="animate-spin" size={18} /> Deploying...</>
+            ) : !canAfford ? (
+              <><AlertCircle size={16} /> Insufficient G-Points</>
+            ) : (
+              "Deploy Challenge"
+            )}
           </button>
         </motion.div>
       </div>

@@ -104,14 +104,27 @@ function ChallengeMode() {
   const [loading, setLoading] = useState(true);
   const [selectedSlab, setSelectedSlab] = useState("All");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [acceptingId, setAcceptingId] = useState(null); // track which card is loading
+  const [acceptingId, setAcceptingId] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [gPointsBalance, setGPointsBalance] = useState(null); // null = loading
 
-  // ── Get current user on mount ──
+  // ── Get current user + wallet balance on mount ──
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setCurrentUserId(data?.session?.user?.id || null);
-    });
+    const init = async () => {
+      const { data: authData } = await supabase.auth.getSession();
+      const uid = authData?.session?.user?.id || null;
+      setCurrentUserId(uid);
+
+      if (uid) {
+        const { data: wallet } = await supabase
+          .from("wallet")
+          .select("g_points_balance")
+          .eq("user_id", uid)
+          .single();
+        setGPointsBalance(wallet?.g_points_balance ?? 0);
+      }
+    };
+    init();
   }, []);
 
   const fetchChallenges = async () => {
@@ -181,6 +194,12 @@ function ChallengeMode() {
       return;
     }
 
+    // Check G-Points balance
+    if (gPointsBalance !== null && gPointsBalance < match.entry_points) {
+      alert(`Insufficient G-Points. You need ${match.entry_points} G-PTS but have ${gPointsBalance}. Top up your wallet.`);
+      return;
+    }
+
     try {
       setAcceptingId(match.id);
 
@@ -247,6 +266,7 @@ function ChallengeMode() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onChallengeCreated={handleChallengeCreated}
+        gPointsBalance={gPointsBalance}
       />
 
       <header className="max-w-6xl mx-auto mb-12 relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
@@ -262,12 +282,26 @@ function ChallengeMode() {
             <h1 className="text-5xl italic tracking-tighter leading-none">Challenge Mode</h1>
           </div>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-emerald-500 text-black px-10 py-5 rounded-[2.5rem] text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center gap-3 shrink-0"
-        >
-          <Plus size={18} strokeWidth={3} /> Create Challenge
-        </button>
+
+        <div className="flex items-center gap-4 shrink-0">
+          {/* G-Points balance HUD */}
+          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-5 py-3 rounded-2xl">
+            <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+            <div>
+              <p className="text-[8px] text-slate-500 tracking-widest leading-none mb-0.5">Balance</p>
+              <p className="text-sm text-emerald-400 font-black leading-none">
+                {gPointsBalance === null ? "..." : `${gPointsBalance} G`}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-emerald-500 text-black px-10 py-5 rounded-[2.5rem] text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center gap-3"
+          >
+            <Plus size={18} strokeWidth={3} /> Create Challenge
+          </button>
+        </div>
       </header>
 
       {/* SLAB FILTERS */}
@@ -311,6 +345,7 @@ function ChallengeMode() {
               const arenaName  = match.arena?.name  || "TBD";
               const isOwnChallenge = match.created_by === currentUserId;
               const isAccepting = acceptingId === match.id;
+              const canAfford = gPointsBalance === null || gPointsBalance >= match.entry_points;
 
               return (
                 <motion.div
@@ -368,6 +403,15 @@ function ChallengeMode() {
                     >
                       <Loader2 size={14} className="animate-spin" />
                       Waiting for Opponent...
+                    </button>
+                  ) : !canAfford ? (
+                    // Not enough G-Points
+                    <button
+                      disabled
+                      className="w-full bg-red-500/10 border border-red-500/20 text-red-400 py-5 rounded-2xl text-xs tracking-[0.2em] cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Gamepad2 size={14} />
+                      Need {match.entry_points} G-PTS to Accept
                     </button>
                   ) : (
                     // Others see the Accept button
