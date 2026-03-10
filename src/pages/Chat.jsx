@@ -537,7 +537,6 @@ function Chat() {
   const formatMatchTime = (d) => { if (!d) return "TBD"; return new Date(d).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); };
   const parseSport = (mt = "") => { const p = mt.split("_"); return p[1] ? p[1].charAt(0).toUpperCase() + p[1].slice(1) : "Match"; };
 
-  const canReschedule = !bookingConfirmed && !isCancelled && matchInfo?.status !== "reschedule_pending";
   const rescheduleIsPending = matchInfo?.status === "reschedule_pending";
   const canCancel = !bookingConfirmed && !isCancelled;
 
