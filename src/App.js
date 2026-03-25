@@ -73,51 +73,75 @@ function LayoutContent() {
     <>
       {!shouldHide && <Navbar />}
       <Routes>
+        {/* ── PUBLIC ── */}
         <Route path="/" element={<Home />} />
         <Route path="/booking" element={<Explore />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/owner-login" element={<OwnerLogin />} />
+        <Route path="/admin-login" element={<AdminLogin />} />
         <Route path="/about" element={<About />} />
         <Route path="/policies" element={<Policies />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/confirm" element={<ConfirmBooking />} />
-        <Route path="/owner" element={<OwnerDashboard />} />
-        <Route path="/settings" element={<Settings />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
-        <Route path="/success" element={<BookingSuccess />} />
         <Route path="/play-area/:id" element={<PlayAreaDetail />} />
-        <Route path="/superadmin-portal" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />  
-        <Route path="/my-bookings" element={<MyBookings />} />
-        <Route path="/challenge" element={<ChallengeMode />} />
-        <Route path="/find-players" element={<FindPlayers />} />
-        <Route path="/submit-result" element={<SubmitResult />} />
-        <Route path="/manager" element={<VenueManager />} />
-        <Route path="/profile" element={<UserProfile />} />
-        <Route path="/wallet" element={<Wallet />} />
-        <Route path="/community" element={<CommunityGroups />} />
-        <Route path="/tournaments" element={<Tournaments />} />
-        <Route path="/match-review" element={<MatchReview />} />
-        <Route path="/admin" element={<ProtectedRoute><AdminControlCenter /></ProtectedRoute>} />
-        <Route path="/match-lobby" element={<MatchLobby />} />
         <Route path="/player/:id" element={<PlayerProfile />} />
-        <Route path="/notifications" element={<NotificationCenter />} />
-        <Route path="/challenge-select" element={<CreateChallenge />} />
-        <Route path="/crew" element={<Crew />} />
-        <Route path="/safety" element={<SafetyCenter />} />
-        <Route path="/lobby-hub" element={<LobbyHub />} />
-        <Route path="/group/:id" element={<GroupDetails />} />
-        <Route path="/create-group" element={<CreateGroup />} />
-        <Route path="/group-management" element={<GroupManagement />} />
-        <Route path="/search-players" element={<SearchPlayer />} />
-        <Route path="/owner-login" element={<OwnerLogin />} />
-        <Route path="/admin-login" element={<AdminLogin />} />
-        <Route path="/create-appeal" element={<CreateAppealModal />} />
         <Route path="/arena-legends" element={<ArenaLegends />} />
-        <Route path="/standard-profile" element={<StandardProfile />} />
-        <Route path="/inbox" element={<Inbox />} />
-        <Route path="/chat/:type/:id" element={<UniversalChat />} />
-        <Route path="/chat/:id" element={<Chat />} />
 
+        {/* ── LOGGED IN USERS ── */}
+        <Route path="/confirm" element={<ProtectedRoute><ConfirmBooking /></ProtectedRoute>} />
+        <Route path="/success" element={<ProtectedRoute><BookingSuccess /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/my-bookings" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
+        <Route path="/find-players" element={<ProtectedRoute><FindPlayers /></ProtectedRoute>} />
+        <Route path="/challenge" element={<ProtectedRoute><ChallengeMode /></ProtectedRoute>} />
+        <Route path="/challenge-select" element={<ProtectedRoute><CreateChallenge /></ProtectedRoute>} />
+        <Route path="/submit-result" element={<ProtectedRoute><SubmitResult /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+        <Route path="/standard-profile" element={<ProtectedRoute><StandardProfile /></ProtectedRoute>} />
+        <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
+        <Route path="/community" element={<ProtectedRoute><CommunityGroups /></ProtectedRoute>} />
+        <Route path="/tournaments" element={<ProtectedRoute><Tournaments /></ProtectedRoute>} />
+        <Route path="/match-review" element={<ProtectedRoute><MatchReview /></ProtectedRoute>} />
+        <Route path="/match-lobby" element={<ProtectedRoute><MatchLobby /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute><NotificationCenter /></ProtectedRoute>} />
+        <Route path="/crew" element={<ProtectedRoute><Crew /></ProtectedRoute>} />
+        <Route path="/safety" element={<ProtectedRoute><SafetyCenter /></ProtectedRoute>} />
+        <Route path="/lobby-hub" element={<ProtectedRoute><LobbyHub /></ProtectedRoute>} />
+        <Route path="/group/:id" element={<ProtectedRoute><GroupDetails /></ProtectedRoute>} />
+        <Route path="/create-group" element={<ProtectedRoute><CreateGroup /></ProtectedRoute>} />
+        <Route path="/group-management" element={<ProtectedRoute><GroupManagement /></ProtectedRoute>} />
+        <Route path="/search-players" element={<ProtectedRoute><SearchPlayer /></ProtectedRoute>} />
+        <Route path="/create-appeal" element={<ProtectedRoute><CreateAppealModal /></ProtectedRoute>} />
+        <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
+        <Route path="/chat/:type/:id" element={<ProtectedRoute><UniversalChat /></ProtectedRoute>} />
+        <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+
+        {/* ── OWNER ONLY ── */}
+        <Route path="/owner" element={
+          <ProtectedRoute allowedRoles={['owner', 'admin', 'superadmin']}>
+            <OwnerDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/manager" element={
+          <ProtectedRoute allowedRoles={['owner', 'admin', 'superadmin']}>
+            <VenueManager />
+          </ProtectedRoute>
+        } />
+
+        {/* ── ADMIN ONLY ── */}
+        <Route path="/admin" element={
+          <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
+            <AdminControlCenter />
+          </ProtectedRoute>
+        } />
+
+        {/* ── SUPERADMIN ONLY ── */}
+        <Route path="/superadmin-portal" element={
+          <ProtectedRoute allowedRoles={['superadmin']}>
+            <SuperAdmin />
+          </ProtectedRoute>
+        } />
       </Routes>
       {!shouldHide && <Footer />}
     </>
@@ -127,7 +151,7 @@ function LayoutContent() {
 export default function App() {
   return (
     <Router>
-      <ScrollToTop />   {/* ✅ THIS FIXES SCROLL ISSUE */}
+      <ScrollToTop />
       <LayoutContent />
     </Router>
   );
