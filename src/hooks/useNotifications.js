@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../supabase'
+import { supabase } from "../lib/supabase"
 import { subscribeToNotifications } from '../services/realtimeService'
 
 export const useNotifications = () => {

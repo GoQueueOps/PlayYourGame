@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { supabase } from "../lib/supabase"
 
 // ── CREATE CHALLENGE ──
 export const createChallenge = async ({

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../supabase'
+import { supabase } from "../lib/supabase"
 
 export const useRole = () => {
   const [role, setRole] = useState(null)
