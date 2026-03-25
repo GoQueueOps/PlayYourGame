@@ -42,11 +42,13 @@ function Navbar() {
         ) : (
           <div className="flex items-center gap-4">
             {/* 👇 CLICKABLE USER NAME */}
+           {/* 👇 UPDATED CLICKABLE USER NAME */}
             <button
-              onClick={() => navigate("/profile")}
-              className="text-white text-[10px] font-black uppercase tracking-widest hover:text-green-400 transition-all"
-            >
-              {user.user_metadata?.full_name || "Player"}
+             onClick={() => navigate("/profile")}
+               className="text-white text-[10px] font-black uppercase tracking-widest hover:text-green-400 transition-all"
+              >
+                {/* Check for 'name' first, then 'full_name', then fallback */}
+                {user.user_metadata?.name || user.user_metadata?.full_name || "Player"}   
             </button>
 
             <button
