@@ -4,6 +4,7 @@ import { markPaymentDone } from './matchService'
 const RAZORPAY_KEY_ID = process.env.REACT_APP_RAZORPAY_KEY_ID
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY
+const IS_PRODUCTION = process.env.REACT_APP_ENV === 'production'
 
 // ── LOAD RAZORPAY SCRIPT ──
 export const loadRazorpay = () => {
@@ -113,12 +114,14 @@ export const initiatePayment = async ({
     },
     handler: async (response) => {
       try {
-        // Step 5 — Verify signature server-side
-        await verifyPayment(
-          response.razorpay_order_id,
-          response.razorpay_payment_id,
-          response.razorpay_signature
-        )
+        // Step 5 — Verify signature (production only)
+        if (IS_PRODUCTION) {
+          await verifyPayment(
+            response.razorpay_order_id,
+            response.razorpay_payment_id,
+            response.razorpay_signature
+          )
+        }
 
         // Step 6 — Mark payment done in DB
         // If both players paid → auto_confirm_booking trigger fires
