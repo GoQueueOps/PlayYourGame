@@ -1,8 +1,12 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Check, Lock, ChevronLeft, Sparkles } from "lucide-react";
 import logo from "../assets/logo.png";
+import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabase";
+import { initiatePayment } from "../services/paymentService";
+import { createMatchBooking } from "../services/matchService";
 
 /* ─────────────── HELPERS ─────────────── */
 function getAdvanceAmount(total) {
@@ -14,10 +18,10 @@ function getAdvanceAmount(total) {
 function formatNiceDate(date) {
   if (!date) return "";
   const d = new Date(date);
-  return d.toLocaleDateString("en-GB", { 
-    weekday: "short", 
-    day: "2-digit", 
-    month: "short"
+  return d.toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
   });
 }
 
@@ -25,12 +29,28 @@ function formatNiceDate(date) {
 function ConfirmBooking() {
   const { state } = useLocation();
   const navigate = useNavigate();
-  
+  const { user } = useAuth();
+
   const [paymentType, setPaymentType] = useState("advance");
   const [useZPoints, setUseZPoints] = useState(false);
   const [voucherCode, setVoucherCode] = useState("");
-  const [userWalletBalance] = useState(50); 
+  const [zPointsBalance, setZPointsBalance] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Fetch real Z points balance from wallet
+  useEffect(() => {
+    const fetchWallet = async () => {
+      if (!user) return
+      const { data } = await supabase
+        .from("wallet")
+        .select("z_points_balance")
+        .eq("user_id", user.id)
+        .single()
+      if (data) setZPointsBalance(data.z_points_balance)
+    }
+    fetchWallet()
+  }, [user])
 
   if (!state) {
     return (
@@ -48,7 +68,7 @@ function ConfirmBooking() {
     );
   }
 
-  const { area, selectedDate, selectedCourt, startTime, endTime, price } = state;
+  const { area, selectedDate, selectedCourt, startTime, endTime, price, matchId } = state;
 
   let displaySport = state.selectedSport || "Match Session";
   let friendlyCourtName = "Main Court";
@@ -63,38 +83,68 @@ function ConfirmBooking() {
     });
   }
 
-  const discount = useZPoints ? userWalletBalance : 0;
+  const discount = useZPoints ? zPointsBalance : 0;
   const finalPrice = Math.max(0, price - discount);
   const advanceAmount = getAdvanceAmount(finalPrice);
   const payableNow = paymentType === "advance" ? advanceAmount : finalPrice;
 
-  const handleFinalPayment = () => {
+  const handleFinalPayment = async () => {
     setIsProcessing(true);
-    const transactionId = "TXN" + Date.now().toString().slice(-6);
-    
-    setTimeout(() => {
-      navigate("/success", { 
-        state: { 
-          ...state,         
-          payableNow: payableNow,       
-          price: finalPrice,
-          courtName: friendlyCourtName, 
-          selectedSport: displaySport, 
-          voucherApplied: voucherCode,
-          id: transactionId 
-        } 
+    setError(null);
+
+    try {
+      // 1. Create booking in DB
+      const booking = await createMatchBooking({
+        matchId: matchId || null,
+        arenaId: area?.id || null,
+        courtId: selectedCourt || null,
+        arenaName: area?.name,
+        sportType: displaySport,
+        price: finalPrice,
+        challengerId: user.id,
+        accepterId: null,
+        bookingDate: selectedDate,
       });
-    }, 800);
+
+      // 2. Open Razorpay
+      await initiatePayment({
+        bookingId: booking.id,
+        amount: payableNow,
+        role: "challenger",
+        userName: user.user_metadata?.name || user.user_metadata?.full_name,
+        userEmail: user.email,
+        onSuccess: (response) => {
+          navigate("/success", {
+            state: {
+              ...state,
+              bookingId: booking.id,
+              payableNow,
+              price: finalPrice,
+              courtName: friendlyCourtName,
+              selectedSport: displaySport,
+              voucherApplied: voucherCode,
+              transactionId: response.razorpay_payment_id,
+            },
+          });
+        },
+        onFailure: (err) => {
+          setError(err.message || "Payment failed. Please try again.")
+          setIsProcessing(false)
+        },
+      });
+
+    } catch (err) {
+      console.error("Booking error:", err);
+      setError(err.message || "Something went wrong. Please try again.");
+      setIsProcessing(false);
+    }
   };
 
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
-      },
+      transition: { staggerChildren: 0.1, delayChildren: 0.2 },
     },
   };
 
@@ -112,18 +162,12 @@ function ConfirmBooking() {
       {/* ANIMATED BACKGROUND GLOWS */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <motion.div
-          animate={{
-            x: [0, 50, -30, 0],
-            y: [0, -40, 30, 0],
-          }}
+          animate={{ x: [0, 50, -30, 0], y: [0, -40, 30, 0] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
           className="absolute top-20 -left-40 w-96 h-96 bg-blue-500/20 blur-[100px] rounded-full"
         />
         <motion.div
-          animate={{
-            x: [0, -50, 30, 0],
-            y: [0, 40, -30, 0],
-          }}
+          animate={{ x: [0, -50, 30, 0], y: [0, 40, -30, 0] }}
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
           className="absolute bottom-20 -right-40 w-96 h-96 bg-green-500/20 blur-[100px] rounded-full"
         />
@@ -172,15 +216,9 @@ function ConfirmBooking() {
           whileHover={{ y: -8, boxShadow: "0 30px 60px rgba(59, 130, 246, 0.2)" }}
           className="relative group rounded-3xl overflow-hidden"
         >
-          {/* GRADIENT BORDER EFFECT */}
           <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-green-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl blur" />
-
           <div className="relative bg-gradient-to-br from-slate-900/80 to-slate-950/80 backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex gap-5">
-            {/* IMAGE WITH GLOW */}
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              className="relative"
-            >
+            <motion.div whileHover={{ scale: 1.05 }} className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-green-500 rounded-2xl opacity-0 group-hover:opacity-50 blur-lg transition-opacity" />
               <img
                 src={area?.images?.[0]}
@@ -188,7 +226,6 @@ function ConfirmBooking() {
                 className="relative w-20 h-20 object-cover rounded-2xl border border-white/20"
               />
             </motion.div>
-
             <div className="flex flex-col justify-between text-left flex-1">
               <div>
                 <h2 className="font-black text-lg leading-tight line-clamp-2 mb-2 group-hover:text-blue-300 transition-colors">
@@ -290,7 +327,7 @@ function ConfirmBooking() {
             </motion.div>
             <div className="text-left">
               <p className="text-xs font-black text-gray-400 uppercase tracking-wide">Z-Points</p>
-              <p className="text-lg font-black">₹{userWalletBalance}</p>
+              <p className="text-lg font-black">₹{zPointsBalance}</p>
             </div>
           </div>
           <motion.span
@@ -310,7 +347,6 @@ function ConfirmBooking() {
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">
             Payment Method
           </p>
-
           <label
             className={`flex justify-between p-5 rounded-2xl border cursor-pointer transition-all ${
               paymentType === "advance"
@@ -319,7 +355,7 @@ function ConfirmBooking() {
             }`}
           >
             <div className="flex gap-3 items-center">
-              <motion.input
+              <input
                 type="radio"
                 checked={paymentType === "advance"}
                 onChange={() => setPaymentType("advance")}
@@ -348,7 +384,7 @@ function ConfirmBooking() {
             }`}
           >
             <div className="flex gap-3 items-center">
-              <motion.input
+              <input
                 type="radio"
                 checked={paymentType === "full"}
                 onChange={() => setPaymentType("full")}
@@ -370,21 +406,25 @@ function ConfirmBooking() {
           </label>
         </motion.div>
 
+        {/* ─────── ERROR MESSAGE ─────── */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 text-center"
+          >
+            <p className="text-red-400 text-xs font-black">{error}</p>
+          </motion.div>
+        )}
+
         {/* ─────── FINAL CHECKOUT ─────── */}
-        <motion.div
-          variants={itemVariants}
-          className="relative overflow-hidden rounded-3xl"
-        >
-          {/* ANIMATED BACKGROUND */}
+        <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-green-600/20 to-transparent" />
           <motion.div
-            animate={{
-              opacity: [0.5, 1, 0.5],
-            }}
+            animate={{ opacity: [0.5, 1, 0.5] }}
             transition={{ duration: 3, repeat: Infinity }}
             className="absolute -top-20 -right-20 w-40 h-40 bg-green-500/30 blur-3xl rounded-full"
           />
-
           <div className="relative bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl border border-white/20 p-8 rounded-3xl text-center space-y-6 shadow-2xl">
             <div className="space-y-2">
               <p className="text-xs font-black text-slate-400 uppercase tracking-[0.4em]">
@@ -418,7 +458,7 @@ function ConfirmBooking() {
               ) : (
                 <div className="flex items-center justify-center gap-2">
                   <Lock size={20} />
-                  Confirm & Pay
+                  Confirm & Pay ₹{payableNow}
                   <Sparkles size={20} />
                 </div>
               )}
@@ -427,16 +467,13 @@ function ConfirmBooking() {
 
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
               <Check size={12} />
-              Secure Payment
+              Secured by Razorpay
             </p>
           </div>
         </motion.div>
 
         {/* TRUST BADGES */}
-        <motion.div
-          variants={itemVariants}
-          className="flex justify-around pt-4 text-center"
-        >
+        <motion.div variants={itemVariants} className="flex justify-around pt-4 text-center">
           {["🔒 Secure", "✓ Verified", "⚡ Instant"].map((badge, idx) => (
             <div key={idx} className="text-xs font-bold text-slate-500 uppercase tracking-wide">
               {badge}
