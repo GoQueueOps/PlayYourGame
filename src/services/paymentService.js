@@ -20,7 +20,14 @@ export const loadRazorpay = () => {
 
 // ── CREATE RAZORPAY ORDER (via edge function) ──
 export const createRazorpayOrder = async (amount, bookingId, role) => {
-  const { data: { session } } = await supabase.auth.getSession()
+  // Get session fresh each time
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+
+  if (sessionError || !sessionData?.session) {
+    throw new Error('Not authenticated. Please log in again.')
+  }
+
+  const token = sessionData.session.access_token
 
   const response = await fetch(
     `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/create-razorpay-order`,
@@ -28,14 +35,20 @@ export const createRazorpayOrder = async (amount, bookingId, role) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
+        'Authorization': `Bearer ${token}`,
+        'apikey': process.env.REACT_APP_SUPABASE_ANON_KEY
       },
       body: JSON.stringify({ amount, currency: 'INR', bookingId, role })
     }
   )
 
   const data = await response.json()
-  if (!response.ok) throw new Error(data.error || 'Failed to create order')
+
+  if (!response.ok) {
+    console.error('Edge function error:', data)
+    throw new Error(data.error || `Order creation failed (${response.status})`)
+  }
+
   return data.order
 }
 
