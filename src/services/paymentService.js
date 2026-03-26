@@ -4,23 +4,15 @@ import { markPaymentDone } from './matchService'
 const RAZORPAY_KEY_ID = process.env.REACT_APP_RAZORPAY_KEY_ID
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY
+const FUNCTION_SECRET = process.env.REACT_APP_FUNCTION_SECRET
 const IS_PRODUCTION = process.env.REACT_APP_ENV === 'production'
 
-// ── GET FRESH AUTH HEADERS ──
-const getAuthHeaders = async () => {
-  const { data: { session }, error } = await supabase.auth.getSession()
-
-  // Temporary debug
-  console.log('Session:', session ? 'found ✅' : 'missing ❌')
-  console.log('Access token:', session?.access_token ? session.access_token.slice(0, 30) + '...' : 'MISSING ❌')
-  console.log('Anon Key:', SUPABASE_ANON_KEY ? 'present ✅' : 'missing ❌')
-
-  if (error || !session) throw new Error('Not logged in. Please sign in again.')
-
+// ── GET HEADERS (custom secret instead of JWT) ──
+const getAuthHeaders = () => {
   return {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${session.access_token}`,
-    'apikey': SUPABASE_ANON_KEY
+    'apikey': SUPABASE_ANON_KEY,
+    'x-function-secret': FUNCTION_SECRET
   }
 }
 
@@ -38,22 +30,16 @@ export const loadRazorpay = () => {
 
 // ── CREATE RAZORPAY ORDER ──
 export const createRazorpayOrder = async (amount, bookingId, role) => {
-  const headers = await getAuthHeaders()
-
-  console.log('Calling edge function:', `${SUPABASE_URL}/functions/v1/create-razorpay-order`)
-
   const response = await fetch(
     `${SUPABASE_URL}/functions/v1/create-razorpay-order`,
     {
       method: 'POST',
-      headers,
+      headers: getAuthHeaders(),
       body: JSON.stringify({ amount, currency: 'INR', bookingId, role })
     }
   )
 
   const data = await response.json()
-  console.log('Edge function response:', response.status, data)
-
   if (!response.ok) {
     console.error('Edge function error:', data)
     throw new Error(data.error || `Order creation failed (${response.status})`)
@@ -63,13 +49,11 @@ export const createRazorpayOrder = async (amount, bookingId, role) => {
 
 // ── VERIFY PAYMENT SIGNATURE ──
 export const verifyPayment = async (razorpay_order_id, razorpay_payment_id, razorpay_signature) => {
-  const headers = await getAuthHeaders()
-
   const response = await fetch(
     `${SUPABASE_URL}/functions/v1/verify-payment`,
     {
       method: 'POST',
-      headers,
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         razorpay_order_id,
         razorpay_payment_id,
@@ -102,7 +86,7 @@ export const initiatePayment = async ({
     return
   }
 
-  // Step 2 — Create order via edge function (JWT protected)
+  // Step 2 — Create order via edge function
   const order = await createRazorpayOrder(amount, bookingId, role)
 
   // Step 3 — Save order id to booking
@@ -132,7 +116,7 @@ export const initiatePayment = async ({
     },
     handler: async (response) => {
       try {
-        // Step 5 — Verify signature server-side (production only)
+        // Step 5 — Verify signature (production only)
         if (IS_PRODUCTION) {
           await verifyPayment(
             response.razorpay_order_id,
@@ -142,6 +126,8 @@ export const initiatePayment = async ({
         }
 
         // Step 6 — Mark payment done in DB
+        // If both players paid → auto_confirm_booking trigger fires
+        // → booking confirmed → match status = active
         await markPaymentDone(bookingId, role)
 
         // Step 7 — Success
