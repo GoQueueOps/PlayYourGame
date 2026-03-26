@@ -49,9 +49,10 @@ export const joinChallenge = async (matchId, team) => {
 }
 
 // ── CREATE BOOKING FOR MATCH ──
-export const createMatchBooking = async ({
+  export const createMatchBooking = async ({
   matchId, arenaId, courtId, arenaName, sportType,
-  price, challengerId, accepterId, bookingDate
+  price, challengerId, accepterId, bookingDate,
+  startTime, endTime  
 }) => {
   const { data, error } = await supabase
     .from('bookings')
@@ -66,6 +67,8 @@ export const createMatchBooking = async ({
       accepter_id: accepterId,
       user_id: challengerId,
       booking_date: bookingDate,
+      start_time: startTime,
+      end_time: endTime,
       status: 'pending',
       paid_by_challenger: false,
       paid_by_accepter: false

@@ -114,6 +114,8 @@ function ConfirmBooking() {
         challengerId: user.id,
         accepterId: null,
         bookingDate: selectedDate,
+        startTime: startTime,   
+        endTime: endTime  
       });
 
       // 2. Open Razorpay
