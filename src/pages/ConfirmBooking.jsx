@@ -9,6 +9,12 @@ import { initiatePayment } from "../services/paymentService";
 import { createMatchBooking } from "../services/matchService";
 
 /* ─────────────── HELPERS ─────────────── */
+// Helper to validate UUID format to prevent "invalid input syntax for type uuid"
+const isUUID = (str) => {
+  const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return typeof str === 'string' && regex.test(str);
+};
+
 function getAdvanceAmount(total) {
   if (total <= 1000) return 100;
   if (total <= 2000) return 200;
@@ -38,19 +44,18 @@ function ConfirmBooking() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch real Z points balance from wallet
   useEffect(() => {
     const fetchWallet = async () => {
-      if (!user) return
+      if (!user) return;
       const { data } = await supabase
         .from("wallet")
         .select("z_points_balance")
         .eq("user_id", user.id)
-        .single()
-      if (data) setZPointsBalance(data.z_points_balance)
-    }
-    fetchWallet()
-  }, [user])
+        .single();
+      if (data) setZPointsBalance(data.z_points_balance);
+    };
+    fetchWallet();
+  }, [user]);
 
   if (!state) {
     return (
@@ -93,12 +98,17 @@ function ConfirmBooking() {
     setError(null);
 
     try {
+      // 🚨 FIX: Validate IDs. If they are "1" or invalid, pass null to avoid DB crash.
+      const validMatchId = isUUID(matchId) ? matchId : null;
+      const validArenaId = isUUID(area?.id) ? area.id : null;
+      const validCourtId = isUUID(selectedCourt) ? selectedCourt : null;
+
       // 1. Create booking in DB
       const booking = await createMatchBooking({
-        matchId: matchId || null,
-        arenaId: area?.id || null,
-        courtId: selectedCourt || null,
-        arenaName: area?.name,
+        matchId: validMatchId,
+        arenaId: validArenaId,
+        courtId: validCourtId,
+        arenaName: area?.name || "Unknown Arena",
         sportType: displaySport,
         price: finalPrice,
         challengerId: user.id,
@@ -111,7 +121,8 @@ function ConfirmBooking() {
         bookingId: booking.id,
         amount: payableNow,
         role: "challenger",
-        userName: user.user_metadata?.name || user.user_metadata?.full_name,
+        // FIX: Ensure username logic matches your trigger/metadata keys
+        userName: user.user_metadata?.name || user.user_metadata?.full_name || "Player",
         userEmail: user.email,
         onSuccess: (response) => {
           navigate("/success", {
@@ -159,7 +170,6 @@ function ConfirmBooking() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-black to-slate-900 text-white pb-10 pt-6 font-sans overflow-hidden relative">
-      {/* ANIMATED BACKGROUND GLOWS */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <motion.div
           animate={{ x: [0, 50, -30, 0], y: [0, -40, 30, 0] }}
@@ -179,7 +189,6 @@ function ConfirmBooking() {
         variants={containerVariants}
         className="max-w-md mx-auto px-4 space-y-6 relative z-10"
       >
-        {/* ─────── HEADER ─────── */}
         <motion.div variants={itemVariants} className="flex justify-between items-center">
           <motion.button
             whileHover={{ scale: 1.1 }}
@@ -199,7 +208,6 @@ function ConfirmBooking() {
           <div className="w-12" />
         </motion.div>
 
-        {/* ─────── TITLE ─────── */}
         <motion.div variants={itemVariants} className="space-y-2">
           <h1 className="text-4xl font-black tracking-tight leading-none">
             Review Your
@@ -210,7 +218,6 @@ function ConfirmBooking() {
           </h1>
         </motion.div>
 
-        {/* ─────── COURT INFO CARD ─────── */}
         <motion.div
           variants={itemVariants}
           whileHover={{ y: -8, boxShadow: "0 30px 60px rgba(59, 130, 246, 0.2)" }}
@@ -248,7 +255,6 @@ function ConfirmBooking() {
           </div>
         </motion.div>
 
-        {/* ─────── PRICE BREAKDOWN ─────── */}
         <motion.div variants={itemVariants} className="space-y-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">
             Price Details
@@ -277,7 +283,6 @@ function ConfirmBooking() {
           </div>
         </motion.div>
 
-        {/* ─────── VOUCHER SECTION ─────── */}
         <motion.div variants={itemVariants} className="space-y-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">
             Apply Promo Code
@@ -302,7 +307,6 @@ function ConfirmBooking() {
           </div>
         </motion.div>
 
-        {/* ─────── Z-POINTS TOGGLE ─────── */}
         <motion.button
           variants={itemVariants}
           onClick={() => setUseZPoints(!useZPoints)}
@@ -342,7 +346,6 @@ function ConfirmBooking() {
           </motion.span>
         </motion.button>
 
-        {/* ─────── PAYMENT METHODS ─────── */}
         <motion.div variants={itemVariants} className="space-y-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">
             Payment Method
@@ -357,6 +360,7 @@ function ConfirmBooking() {
             <div className="flex gap-3 items-center">
               <input
                 type="radio"
+                name="payment"
                 checked={paymentType === "advance"}
                 onChange={() => setPaymentType("advance")}
                 className="w-5 h-5 accent-green-500 cursor-pointer"
@@ -386,6 +390,7 @@ function ConfirmBooking() {
             <div className="flex gap-3 items-center">
               <input
                 type="radio"
+                name="payment"
                 checked={paymentType === "full"}
                 onChange={() => setPaymentType("full")}
                 className="w-5 h-5 accent-blue-500 cursor-pointer"
@@ -406,7 +411,6 @@ function ConfirmBooking() {
           </label>
         </motion.div>
 
-        {/* ─────── ERROR MESSAGE ─────── */}
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -417,7 +421,6 @@ function ConfirmBooking() {
           </motion.div>
         )}
 
-        {/* ─────── FINAL CHECKOUT ─────── */}
         <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-green-600/20 to-transparent" />
           <motion.div
@@ -447,14 +450,14 @@ function ConfirmBooking() {
               className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-green-500 hover:from-blue-400 hover:via-cyan-400 hover:to-green-400 text-black py-5 rounded-2xl font-black text-lg uppercase tracking-tight shadow-xl shadow-blue-500/40 transition-all disabled:opacity-70 relative overflow-hidden group"
             >
               {isProcessing ? (
-                <motion.div className="flex items-center justify-center gap-2">
+                <div className="flex items-center justify-center gap-2">
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ repeat: Infinity, duration: 1 }}
                     className="w-5 h-5 border-2 border-black border-t-transparent rounded-full"
                   />
                   Processing...
-                </motion.div>
+                </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
                   <Lock size={20} />
@@ -472,7 +475,6 @@ function ConfirmBooking() {
           </div>
         </motion.div>
 
-        {/* TRUST BADGES */}
         <motion.div variants={itemVariants} className="flex justify-around pt-4 text-center">
           {["🔒 Secure", "✓ Verified", "⚡ Instant"].map((badge, idx) => (
             <div key={idx} className="text-xs font-bold text-slate-500 uppercase tracking-wide">
