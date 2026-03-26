@@ -9,10 +9,17 @@ import { initiatePayment } from "../services/paymentService";
 import { createMatchBooking } from "../services/matchService";
 
 /* ─────────────── HELPERS ─────────────── */
-// Helper to validate UUID format to prevent "invalid input syntax for type uuid"
 const isUUID = (str) => {
   const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return typeof str === 'string' && regex.test(str);
+};
+
+// Convert date to IST before saving to DB
+const toISTDate = (date) => {
+  if (!date) return null;
+  return new Date(date).toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Kolkata'
+  });
 };
 
 function getAdvanceAmount(total) {
@@ -28,6 +35,7 @@ function formatNiceDate(date) {
     weekday: "short",
     day: "2-digit",
     month: "short",
+    timeZone: "Asia/Kolkata"
   });
 }
 
@@ -98,10 +106,12 @@ function ConfirmBooking() {
     setError(null);
 
     try {
-      // 🚨 FIX: Validate IDs. If they are "1" or invalid, pass null to avoid DB crash.
       const validMatchId = isUUID(matchId) ? matchId : null;
       const validArenaId = isUUID(area?.id) ? area.id : null;
       const validCourtId = isUUID(selectedCourt) ? selectedCourt : null;
+
+      // Convert booking date to IST
+      const bookingDateIST = toISTDate(selectedDate);
 
       // 1. Create booking in DB
       const booking = await createMatchBooking({
@@ -113,9 +123,9 @@ function ConfirmBooking() {
         price: finalPrice,
         challengerId: user.id,
         accepterId: null,
-        bookingDate: selectedDate,
-        startTime: startTime,   
-        endTime: endTime  
+        bookingDate: bookingDateIST,
+        startTime: startTime,
+        endTime: endTime,
       });
 
       // 2. Open Razorpay
@@ -123,7 +133,6 @@ function ConfirmBooking() {
         bookingId: booking.id,
         amount: payableNow,
         role: "challenger",
-        // FIX: Ensure username logic matches your trigger/metadata keys
         userName: user.user_metadata?.name || user.user_metadata?.full_name || "Player",
         userEmail: user.email,
         onSuccess: (response) => {
@@ -191,6 +200,7 @@ function ConfirmBooking() {
         variants={containerVariants}
         className="max-w-md mx-auto px-4 space-y-6 relative z-10"
       >
+        {/* ─────── HEADER ─────── */}
         <motion.div variants={itemVariants} className="flex justify-between items-center">
           <motion.button
             whileHover={{ scale: 1.1 }}
@@ -210,6 +220,7 @@ function ConfirmBooking() {
           <div className="w-12" />
         </motion.div>
 
+        {/* ─────── TITLE ─────── */}
         <motion.div variants={itemVariants} className="space-y-2">
           <h1 className="text-4xl font-black tracking-tight leading-none">
             Review Your
@@ -220,6 +231,7 @@ function ConfirmBooking() {
           </h1>
         </motion.div>
 
+        {/* ─────── COURT INFO CARD ─────── */}
         <motion.div
           variants={itemVariants}
           whileHover={{ y: -8, boxShadow: "0 30px 60px rgba(59, 130, 246, 0.2)" }}
@@ -247,7 +259,7 @@ function ConfirmBooking() {
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-xs font-bold text-white/70">
                   <Sparkles size={12} className="text-amber-400" />
-                  <span>{startTime} - {endTime}</span>
+                  <span>{startTime} - {endTime} IST</span>
                 </div>
                 <p className="text-xs font-black text-green-400/90 tracking-wider">
                   {formatNiceDate(selectedDate)}
@@ -257,6 +269,7 @@ function ConfirmBooking() {
           </div>
         </motion.div>
 
+        {/* ─────── PRICE BREAKDOWN ─────── */}
         <motion.div variants={itemVariants} className="space-y-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">
             Price Details
@@ -285,6 +298,7 @@ function ConfirmBooking() {
           </div>
         </motion.div>
 
+        {/* ─────── VOUCHER SECTION ─────── */}
         <motion.div variants={itemVariants} className="space-y-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">
             Apply Promo Code
@@ -309,6 +323,7 @@ function ConfirmBooking() {
           </div>
         </motion.div>
 
+        {/* ─────── Z-POINTS TOGGLE ─────── */}
         <motion.button
           variants={itemVariants}
           onClick={() => setUseZPoints(!useZPoints)}
@@ -348,6 +363,7 @@ function ConfirmBooking() {
           </motion.span>
         </motion.button>
 
+        {/* ─────── PAYMENT METHODS ─────── */}
         <motion.div variants={itemVariants} className="space-y-2">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2">
             Payment Method
@@ -370,7 +386,7 @@ function ConfirmBooking() {
               <div className="flex flex-col">
                 <span className="text-sm font-black">Pay Advance</span>
                 <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">
-                  Secure your slot
+                  Secure your slot • Pay rest at venue
                 </span>
               </div>
             </div>
@@ -413,6 +429,7 @@ function ConfirmBooking() {
           </label>
         </motion.div>
 
+        {/* ─────── ERROR MESSAGE ─────── */}
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -423,6 +440,7 @@ function ConfirmBooking() {
           </motion.div>
         )}
 
+        {/* ─────── FINAL CHECKOUT ─────── */}
         <motion.div variants={itemVariants} className="relative overflow-hidden rounded-3xl">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-green-600/20 to-transparent" />
           <motion.div
@@ -433,7 +451,7 @@ function ConfirmBooking() {
           <div className="relative bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl border border-white/20 p-8 rounded-3xl text-center space-y-6 shadow-2xl">
             <div className="space-y-2">
               <p className="text-xs font-black text-slate-400 uppercase tracking-[0.4em]">
-                Total Amount
+                {paymentType === "advance" ? "Advance Amount" : "Total Amount"}
               </p>
               <motion.div
                 animate={{ scale: [1, 1.02, 1] }}
@@ -442,6 +460,11 @@ function ConfirmBooking() {
               >
                 ₹{payableNow}
               </motion.div>
+              {paymentType === "advance" && (
+                <p className="text-xs text-slate-500 font-bold">
+                  Remaining ₹{finalPrice - advanceAmount} to be paid at venue
+                </p>
+              )}
             </div>
 
             <motion.button
@@ -477,6 +500,7 @@ function ConfirmBooking() {
           </div>
         </motion.div>
 
+        {/* TRUST BADGES */}
         <motion.div variants={itemVariants} className="flex justify-around pt-4 text-center">
           {["🔒 Secure", "✓ Verified", "⚡ Instant"].map((badge, idx) => (
             <div key={idx} className="text-xs font-bold text-slate-500 uppercase tracking-wide">
