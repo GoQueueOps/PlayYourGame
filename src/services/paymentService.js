@@ -9,7 +9,14 @@ const IS_PRODUCTION = process.env.REACT_APP_ENV === 'production'
 // ── GET FRESH AUTH HEADERS ──
 const getAuthHeaders = async () => {
   const { data: { session }, error } = await supabase.auth.getSession()
+
+  // Temporary debug
+  console.log('Session:', session ? 'found ✅' : 'missing ❌')
+  console.log('Access token:', session?.access_token ? session.access_token.slice(0, 30) + '...' : 'MISSING ❌')
+  console.log('Anon Key:', SUPABASE_ANON_KEY ? 'present ✅' : 'missing ❌')
+
   if (error || !session) throw new Error('Not logged in. Please sign in again.')
+
   return {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${session.access_token}`,
@@ -33,6 +40,8 @@ export const loadRazorpay = () => {
 export const createRazorpayOrder = async (amount, bookingId, role) => {
   const headers = await getAuthHeaders()
 
+  console.log('Calling edge function:', `${SUPABASE_URL}/functions/v1/create-razorpay-order`)
+
   const response = await fetch(
     `${SUPABASE_URL}/functions/v1/create-razorpay-order`,
     {
@@ -43,6 +52,8 @@ export const createRazorpayOrder = async (amount, bookingId, role) => {
   )
 
   const data = await response.json()
+  console.log('Edge function response:', response.status, data)
+
   if (!response.ok) {
     console.error('Edge function error:', data)
     throw new Error(data.error || `Order creation failed (${response.status})`)
@@ -131,8 +142,6 @@ export const initiatePayment = async ({
         }
 
         // Step 6 — Mark payment done in DB
-        // If both players paid → auto_confirm_booking trigger fires
-        // → booking confirmed → match status = active
         await markPaymentDone(bookingId, role)
 
         // Step 7 — Success
