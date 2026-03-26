@@ -40,18 +40,53 @@ export const createRazorpayOrder = async (amount, bookingId, role) => {
   return data.order
 }
 
+// ── VERIFY PAYMENT SIGNATURE ──
+export const verifyPayment = async (razorpay_order_id, razorpay_payment_id, razorpay_signature) => {
+  const response = await fetch(
+    `${SUPABASE_URL}/functions/v1/verify-payment`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature
+      })
+    }
+  )
+
+  const data = await response.json()
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Payment verification failed')
+  }
+  return true
+}
+
 // ── INITIATE PAYMENT ──
 export const initiatePayment = async ({
-  bookingId, amount, role, userName, userEmail, onSuccess, onFailure
+  bookingId,
+  amount,
+  role,
+  userName,
+  userEmail,
+  onSuccess,
+  onFailure
 }) => {
+  // Step 1 — Load Razorpay script
   const loaded = await loadRazorpay()
   if (!loaded) {
     alert('Razorpay failed to load. Check your internet connection.')
     return
   }
 
+  // Step 2 — Create order via edge function
   const order = await createRazorpayOrder(amount, bookingId, role)
 
+  // Step 3 — Save order id to booking
   const orderField = role === 'challenger'
     ? 'razorpay_order_id_challenger'
     : 'razorpay_order_id_accepter'
@@ -61,6 +96,7 @@ export const initiatePayment = async ({
     .update({ [orderField]: order.id })
     .eq('id', bookingId)
 
+  // Step 4 — Open Razorpay checkout
   const options = {
     key: RAZORPAY_KEY_ID,
     amount: order.amount,
@@ -68,14 +104,32 @@ export const initiatePayment = async ({
     name: 'PlayYourGame',
     description: `Booking Payment - ${role}`,
     order_id: order.id,
-    prefill: { name: userName || '', email: userEmail || '' },
-    theme: { color: '#22c55e' },
+    prefill: {
+      name: userName || '',
+      email: userEmail || ''
+    },
+    theme: {
+      color: '#22c55e'
+    },
     handler: async (response) => {
       try {
+        // Step 5 — Verify signature server-side
+        await verifyPayment(
+          response.razorpay_order_id,
+          response.razorpay_payment_id,
+          response.razorpay_signature
+        )
+
+        // Step 6 — Mark payment done in DB
+        // If both players paid → auto_confirm_booking trigger fires
+        // → booking confirmed → match status = active
         await markPaymentDone(bookingId, role)
+
+        // Step 7 — Success
         if (onSuccess) onSuccess(response)
+
       } catch (error) {
-        console.error('Payment handler error:', error)
+        console.error('Payment verification/confirmation error:', error)
         if (onFailure) onFailure(error)
       }
     },
