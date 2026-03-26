@@ -6,6 +6,17 @@ const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY
 const IS_PRODUCTION = process.env.REACT_APP_ENV === 'production'
 
+// ── GET FRESH AUTH HEADERS ──
+const getAuthHeaders = async () => {
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (error || !session) throw new Error('Not logged in. Please sign in again.')
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session.access_token}`,
+    'apikey': SUPABASE_ANON_KEY
+  }
+}
+
 // ── LOAD RAZORPAY SCRIPT ──
 export const loadRazorpay = () => {
   return new Promise((resolve) => {
@@ -20,15 +31,13 @@ export const loadRazorpay = () => {
 
 // ── CREATE RAZORPAY ORDER ──
 export const createRazorpayOrder = async (amount, bookingId, role) => {
+  const headers = await getAuthHeaders()
+
   const response = await fetch(
     `${SUPABASE_URL}/functions/v1/create-razorpay-order`,
     {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'apikey': SUPABASE_ANON_KEY
-      },
+      headers,
       body: JSON.stringify({ amount, currency: 'INR', bookingId, role })
     }
   )
@@ -43,15 +52,13 @@ export const createRazorpayOrder = async (amount, bookingId, role) => {
 
 // ── VERIFY PAYMENT SIGNATURE ──
 export const verifyPayment = async (razorpay_order_id, razorpay_payment_id, razorpay_signature) => {
+  const headers = await getAuthHeaders()
+
   const response = await fetch(
     `${SUPABASE_URL}/functions/v1/verify-payment`,
     {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'apikey': SUPABASE_ANON_KEY
-      },
+      headers,
       body: JSON.stringify({
         razorpay_order_id,
         razorpay_payment_id,
@@ -84,7 +91,7 @@ export const initiatePayment = async ({
     return
   }
 
-  // Step 2 — Create order via edge function
+  // Step 2 — Create order via edge function (JWT protected)
   const order = await createRazorpayOrder(amount, bookingId, role)
 
   // Step 3 — Save order id to booking
@@ -114,7 +121,7 @@ export const initiatePayment = async ({
     },
     handler: async (response) => {
       try {
-        // Step 5 — Verify signature (production only)
+        // Step 5 — Verify signature server-side (production only)
         if (IS_PRODUCTION) {
           await verifyPayment(
             response.razorpay_order_id,
