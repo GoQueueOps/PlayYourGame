@@ -5,16 +5,13 @@ const RAZORPAY_KEY_ID = process.env.REACT_APP_RAZORPAY_KEY_ID
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY
 const FUNCTION_SECRET = process.env.REACT_APP_FUNCTION_SECRET
-const IS_PRODUCTION = process.env.REACT_APP_ENV === 'production'
 
-// ── GET HEADERS (custom secret instead of JWT) ──
-const getAuthHeaders = () => {
-  return {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_ANON_KEY,
-    'x-function-secret': FUNCTION_SECRET
-  }
-}
+// ── GET HEADERS ──
+const getAuthHeaders = () => ({
+  'Content-Type': 'application/json',
+  'apikey': SUPABASE_ANON_KEY,
+  'x-function-secret': FUNCTION_SECRET
+})
 
 // ── LOAD RAZORPAY SCRIPT ──
 export const loadRazorpay = () => {
@@ -47,7 +44,7 @@ export const createRazorpayOrder = async (amount, bookingId, role) => {
   return data.order
 }
 
-// ── VERIFY PAYMENT SIGNATURE ──
+// ── VERIFY PAYMENT SIGNATURE (always runs) ──
 export const verifyPayment = async (razorpay_order_id, razorpay_payment_id, razorpay_signature) => {
   const response = await fetch(
     `${SUPABASE_URL}/functions/v1/verify-payment`,
@@ -111,21 +108,17 @@ export const initiatePayment = async ({
       name: userName || '',
       email: userEmail || ''
     },
-    theme: {
-      color: '#22c55e'
-    },
+    theme: { color: '#22c55e' },
     handler: async (response) => {
       try {
-        // Step 5 — Verify signature (production only)
-        if (IS_PRODUCTION) {
-          await verifyPayment(
-            response.razorpay_order_id,
-            response.razorpay_payment_id,
-            response.razorpay_signature
-          )
-        }
+        // Step 5 — ALWAYS verify signature server-side first
+        await verifyPayment(
+          response.razorpay_order_id,
+          response.razorpay_payment_id,
+          response.razorpay_signature
+        )
 
-        // Step 6 — Mark payment done in DB
+        // Step 6 — Only if verified → mark payment done in DB
         // If both players paid → auto_confirm_booking trigger fires
         // → booking confirmed → match status = active
         await markPaymentDone(bookingId, role)
