@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MapPin, Phone, ChevronLeft, ArrowRight, Clock, Loader } from "lucide-react";
-import { getArenaById, getPriceForTime } from "../services/arenaService";
+import { supabase } from "../lib/supabase";
 
 const TIME_SLOTS = [
   "6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
@@ -10,7 +10,6 @@ const TIME_SLOTS = [
   "6:00 PM", "7:00 PM", "8:00 PM", "9:00 PM", "10:00 PM"
 ];
 
-// Convert slot string to hour number for pricing
 const slotToHour = (slot) => {
   const [time, period] = slot.split(' ')
   let [hour] = time.split(':').map(Number)
@@ -19,12 +18,93 @@ const slotToHour = (slot) => {
   return hour
 }
 
+// Fetch arena directly with supabase (bypass service for now to debug)
+const fetchArenaFromDB = async (id) => {
+  const { data, error } = await supabase
+    .from('arenas')
+    .select(`
+      *,
+      play_area_images (image_url, image_type, position),
+      play_area_amenities (
+        amenities (id, name, emoji)
+      ),
+      arena_sports (
+        sports (id, name, emoji)
+      ),
+      courts (
+        id, name, price_per_hour, is_active,
+        sports (id, name, emoji)
+      ),
+      pricing_rules (start_time, end_time, price_per_hour, sport_id)
+    `)
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+
+  // Sort images
+  const courtImages = (data.play_area_images || [])
+    .filter(img => img.image_type === 'court')
+    .sort((a, b) => (a.position || 0) - (b.position || 0))
+    .map(img => img.image_url)
+
+  const allImages = (data.play_area_images || [])
+    .sort((a, b) => (a.position || 0) - (b.position || 0))
+    .map(img => img.image_url)
+
+  // Build sportsManaged
+  const sportsManaged = {}
+  const activeCourts = (data.courts || []).filter(c => c.is_active)
+  activeCourts.forEach(court => {
+    const sportName = court.sports?.name
+    if (!sportName) return
+    if (!sportsManaged[sportName]) sportsManaged[sportName] = []
+    sportsManaged[sportName].push({
+      id: court.id,
+      name: court.name,
+      physicalID: court.id,
+      pricePerHour: court.price_per_hour,
+      sport: court.sports
+    })
+  })
+
+  const amenities = (data.play_area_amenities || [])
+    .map(pa => pa.amenities).filter(Boolean)
+
+  const sports = (data.arena_sports || [])
+    .map(as => as.sports).filter(Boolean)
+
+  const prices = activeCourts.map(c => c.price_per_hour).filter(Boolean)
+  const minPrice = prices.length > 0 ? Math.min(...prices) : 0
+
+  return {
+    id: data.id,
+    name: data.name,
+    location: data.location,
+    city: data.city,
+    state: data.state,
+    country: data.country,
+    description: data.description,
+    phone: data.phone,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    is_active: data.is_active,
+    images: courtImages.length > 0 ? courtImages : allImages,
+    amenities,
+    sports,
+    sportsManaged,
+    pricePerHour: minPrice,
+    pricingRules: data.pricing_rules || []
+  }
+}
+
 function PlayAreaDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
 
   const [area, setArea] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [imgIdx, setImgIdx] = useState(0)
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [dayOffset, setDayOffset] = useState(0)
@@ -34,15 +114,15 @@ function PlayAreaDetail() {
   const [endTime, setEndTime] = useState(null)
   const [currentPrice, setCurrentPrice] = useState(0)
 
-  // ── FETCH ARENA FROM DB ──
+  // ── FETCH ARENA ──
   useEffect(() => {
-    const fetchArena = async () => {
+    const fetch = async () => {
       setLoading(true)
+      setError(null)
       try {
-        const data = await getArenaById(id)
+        const data = await fetchArenaFromDB(id)
         setArea(data)
 
-        // Set default sport
         const sportNames = Object.keys(data.sportsManaged || {})
         if (sportNames.length > 0) {
           setSelectedSport(sportNames[0])
@@ -53,11 +133,12 @@ function PlayAreaDetail() {
           }
         }
       } catch (err) {
-        console.error('Failed to fetch arena:', err)
+        console.error('Fetch arena error:', err)
+        setError(err.message)
       }
       setLoading(false)
     }
-    fetchArena()
+    fetch()
   }, [id])
 
   // ── UPDATE COURT WHEN SPORT CHANGES ──
@@ -73,18 +154,39 @@ function PlayAreaDetail() {
     }
   }, [selectedSport, area])
 
-  // ── UPDATE PRICE WHEN TIME CHANGES ──
+  // ── UPDATE PRICE WHEN TIME CHANGES (peak pricing) ──
   useEffect(() => {
-    if (!startTime || !area || !selectedCourtID) return
+    if (!startTime || !area) return
     const hour = slotToHour(startTime)
-    getPriceForTime(area.id, selectedCourtID, hour).then(setCurrentPrice)
-  }, [startTime, selectedCourtID, area])
+    const timeStr = `${String(hour).padStart(2, '0')}:00:00`
+
+    // Check pricing rules
+    const matchingRule = area.pricingRules?.find(r =>
+      timeStr >= r.start_time && timeStr < r.end_time
+    )
+
+    if (matchingRule) {
+      setCurrentPrice(matchingRule.price_per_hour)
+    } else {
+      // Fall back to court price
+      const court = area.sportsManaged[selectedSport]?.find(c => c.physicalID === selectedCourtID)
+      if (court) setCurrentPrice(court.pricePerHour)
+    }
+  }, [startTime, selectedCourtID, area, selectedSport])
 
   if (loading) return (
     <div className="min-h-screen bg-[#030712] flex items-center justify-center">
       <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}>
         <Loader size={40} className="text-emerald-500" />
       </motion.div>
+    </div>
+  )
+
+  if (error) return (
+    <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center gap-4">
+      <p className="text-white font-black uppercase tracking-widest text-xl opacity-40">Error Loading Arena</p>
+      <p className="text-red-400 text-sm">{error}</p>
+      <button onClick={() => navigate(-1)} className="text-emerald-400 underline text-sm">Go Back</button>
     </div>
   )
 
@@ -112,7 +214,6 @@ function PlayAreaDetail() {
 
   const selectedCourtData = area.sportsManaged[selectedSport]?.find(c => c.physicalID === selectedCourtID)
   const selectedCourtName = selectedCourtData?.name
-
   const startIdx = TIME_SLOTS.indexOf(startTime)
   const endIdx = endTime ? TIME_SLOTS.indexOf(endTime) : startIdx
 
@@ -134,7 +235,6 @@ function PlayAreaDetail() {
         }}
       />
 
-      {/* AMBIENT GLOW */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[70%] h-[40%] bg-emerald-500/5 blur-[140px] rounded-full" />
       </div>
@@ -262,8 +362,8 @@ function PlayAreaDetail() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => dayOffset > 0 && setDayOffset(dayOffset - 7)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-white/5 hover:text-white transition-all disabled:opacity-30"
                 disabled={dayOffset === 0}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-white/5 hover:text-white transition-all disabled:opacity-30"
               >‹</button>
               <span className="text-[11px] font-bold text-slate-400 px-2">
                 {getDates()[0].toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
@@ -310,13 +410,14 @@ function PlayAreaDetail() {
                 <motion.button
                   key={sport} whileTap={{ scale: 0.95 }}
                   onClick={() => setSelectedSport(sport)}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
                     selectedSport === sport
                       ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
                       : "bg-white/[0.04] border border-white/[0.07] text-slate-400 hover:text-white hover:border-white/20"
                   }`}
                 >
-                  {area.sports?.find(s => s.name === sport)?.emoji} {sport}
+                  <span>{area.sports?.find(s => s.name === sport)?.emoji}</span>
+                  {sport}
                 </motion.button>
               ))}
             </div>
@@ -334,15 +435,19 @@ function PlayAreaDetail() {
                   onClick={() => {
                     setSelectedCourtID(court.physicalID)
                     setCurrentPrice(court.pricePerHour)
+                    setStartTime(null)
+                    setEndTime(null)
                   }}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                  className={`flex flex-col items-start px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
                     selectedCourtID === court.physicalID
                       ? "bg-white text-black shadow-lg shadow-white/10"
                       : "bg-white/[0.04] border border-white/[0.07] text-slate-400 hover:text-white hover:border-white/20"
                   }`}
                 >
-                  {court.name}
-                  <span className="ml-1 text-emerald-400">₹{court.pricePerHour}/hr</span>
+                  <span>{court.name}</span>
+                  <span className={`text-[8px] font-bold ${selectedCourtID === court.physicalID ? 'text-emerald-600' : 'text-emerald-400'}`}>
+                    ₹{court.pricePerHour}/hr
+                  </span>
                 </motion.button>
               ))}
             </div>
@@ -363,7 +468,6 @@ function PlayAreaDetail() {
               </span>
             </div>
           </div>
-
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
             {TIME_SLOTS.map((t) => {
               const currentIdx = TIME_SLOTS.indexOf(t)
@@ -371,7 +475,6 @@ function PlayAreaDetail() {
               const isStart = t === startTime
               const isEnd = t === endTime
               const isEdge = isStart || isEnd
-
               return (
                 <motion.button
                   key={t} whileTap={{ scale: 0.93 }}
@@ -408,7 +511,7 @@ function PlayAreaDetail() {
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
             <div className="flex flex-col min-w-0">
               <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-emerald-500">
-                {selectedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {selectedCourtName || 'Select Court'}
+                {selectedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })} · {selectedCourtName || 'Select Court'}
               </span>
               <span className="text-lg font-black uppercase tracking-tight leading-tight mt-0.5">
                 {startTime ? (
@@ -422,6 +525,7 @@ function PlayAreaDetail() {
               {calcHours() > 0 && (
                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">
                   {calcHours()} hr{calcHours() > 1 ? "s" : ""} · ₹{totalPrice}
+                  {area.pricingRules?.length > 0 && startTime && ' (incl. peak pricing)'}
                 </span>
               )}
             </div>
