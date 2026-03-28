@@ -173,7 +173,7 @@ function PlayAreaDetail() {
     }
 
     fetchBookedSlots()
-  }, [selectedCourtID, selectedDate])
+  }, [selectedCourtID, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── UPDATE COURT WHEN SPORT CHANGES ──
   useEffect(() => {
