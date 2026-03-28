@@ -38,7 +38,6 @@ export const createRazorpayOrder = async (amount, bookingId, role) => {
 
   const data = await response.json()
   if (!response.ok) {
-    console.error('Edge function error:', data)
     throw new Error(data.error || `Order creation failed (${response.status})`)
   }
   return data.order
@@ -84,6 +83,7 @@ export const initiatePayment = async ({
   }
 
   // Step 2 — Create order via edge function
+  // Amount is validated server-side against DB price
   const order = await createRazorpayOrder(amount, bookingId, role)
 
   // Step 3 — Save order id to booking
@@ -111,7 +111,7 @@ export const initiatePayment = async ({
     theme: { color: '#22c55e' },
     handler: async (response) => {
       try {
-        // Step 5 — ALWAYS verify signature server-side first
+        // Step 5 — ALWAYS verify signature + capture server-side
         await verifyPayment(
           response.razorpay_order_id,
           response.razorpay_payment_id,
@@ -127,7 +127,6 @@ export const initiatePayment = async ({
         if (onSuccess) onSuccess(response)
 
       } catch (error) {
-        console.error('Payment verification/confirmation error:', error)
         if (onFailure) onFailure(error)
       }
     },

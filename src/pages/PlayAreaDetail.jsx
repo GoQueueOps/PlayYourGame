@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion} from "framer-motion";
-import { MapPin, Phone, Coffee, Wind, Car, Wifi, ShieldCheck, ChevronLeft, ArrowRight, Clock } from "lucide-react";
-import playAreas from "../data/playAreas";
+import { motion } from "framer-motion";
+import { MapPin, Phone, ChevronLeft, ArrowRight, Clock, Loader } from "lucide-react";
+import { getArenaById, getPriceForTime } from "../services/arenaService";
 
 const TIME_SLOTS = [
   "6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
@@ -10,72 +10,118 @@ const TIME_SLOTS = [
   "6:00 PM", "7:00 PM", "8:00 PM", "9:00 PM", "10:00 PM"
 ];
 
-const AMENITIES = [
-  { icon: <Coffee size={14} />, label: "Snacks & Drinks" },
-  { icon: <Car size={14} />, label: "Free Parking" },
-  { icon: <Wind size={14} />, label: "Air Conditioned" },
-  { icon: <Wifi size={14} />, label: "Free Wi-Fi" },
-  { icon: <ShieldCheck size={14} />, label: "First Aid" },
-];
+// Convert slot string to hour number for pricing
+const slotToHour = (slot) => {
+  const [time, period] = slot.split(' ')
+  let [hour] = time.split(':').map(Number)
+  if (period === 'PM' && hour !== 12) hour += 12
+  if (period === 'AM' && hour === 12) hour = 0
+  return hour
+}
 
 function PlayAreaDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const area = playAreas.find(p => String(p.id) === String(id));
+  const { id } = useParams()
+  const navigate = useNavigate()
 
-  const [imgIdx, setImgIdx] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [dayOffset, setDayOffset] = useState(0);
-  const [selectedSport, setSelectedSport] = useState("");
-  const [selectedCourtID, setSelectedCourtID] = useState("");
-  const [startTime, setStartTime] = useState(null);
-  const [endTime, setEndTime] = useState(null);
+  const [area, setArea] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [imgIdx, setImgIdx] = useState(0)
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [dayOffset, setDayOffset] = useState(0)
+  const [selectedSport, setSelectedSport] = useState("")
+  const [selectedCourtID, setSelectedCourtID] = useState("")
+  const [startTime, setStartTime] = useState(null)
+  const [endTime, setEndTime] = useState(null)
+  const [currentPrice, setCurrentPrice] = useState(0)
 
+  // ── FETCH ARENA FROM DB ──
   useEffect(() => {
-    if (area?.sportsManaged) {
-      const sports = Object.keys(area.sportsManaged);
-      if (sports.length > 0) setSelectedSport(sports[0]);
-    }
-  }, [area]);
+    const fetchArena = async () => {
+      setLoading(true)
+      try {
+        const data = await getArenaById(id)
+        setArea(data)
 
+        // Set default sport
+        const sportNames = Object.keys(data.sportsManaged || {})
+        if (sportNames.length > 0) {
+          setSelectedSport(sportNames[0])
+          const firstCourt = data.sportsManaged[sportNames[0]]?.[0]
+          if (firstCourt) {
+            setSelectedCourtID(firstCourt.physicalID)
+            setCurrentPrice(firstCourt.pricePerHour)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch arena:', err)
+      }
+      setLoading(false)
+    }
+    fetchArena()
+  }, [id])
+
+  // ── UPDATE COURT WHEN SPORT CHANGES ──
   useEffect(() => {
     if (area && selectedSport && area.sportsManaged[selectedSport]) {
-      const courts = area.sportsManaged[selectedSport];
-      if (courts.length > 0) setSelectedCourtID(courts[0].physicalID);
+      const courts = area.sportsManaged[selectedSport]
+      if (courts.length > 0) {
+        setSelectedCourtID(courts[0].physicalID)
+        setCurrentPrice(courts[0].pricePerHour)
+        setStartTime(null)
+        setEndTime(null)
+      }
     }
-  }, [selectedSport, area]);
+  }, [selectedSport, area])
+
+  // ── UPDATE PRICE WHEN TIME CHANGES ──
+  useEffect(() => {
+    if (!startTime || !area || !selectedCourtID) return
+    const hour = slotToHour(startTime)
+    getPriceForTime(area.id, selectedCourtID, hour).then(setCurrentPrice)
+  }, [startTime, selectedCourtID, area])
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}>
+        <Loader size={40} className="text-emerald-500" />
+      </motion.div>
+    </div>
+  )
 
   if (!area) return (
     <div className="min-h-screen bg-[#030712] flex items-center justify-center">
       <p className="text-white font-black uppercase tracking-widest text-xl opacity-40">Arena Not Found</p>
     </div>
-  );
+  )
 
   const onDragEnd = (e, info) => {
-    const offset = info.offset.x;
-    if (offset < -50 && imgIdx < area.images.length - 1) setImgIdx(prev => prev + 1);
-    else if (offset > 50 && imgIdx > 0) setImgIdx(prev => prev - 1);
-  };
+    const offset = info.offset.x
+    if (offset < -50 && imgIdx < area.images.length - 1) setImgIdx(prev => prev + 1)
+    else if (offset > 50 && imgIdx > 0) setImgIdx(prev => prev - 1)
+  }
 
   const getDates = () => {
-    const dates = [];
+    const dates = []
     for (let i = 0; i < 7; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i + dayOffset);
-      dates.push(d);
+      const d = new Date()
+      d.setDate(d.getDate() + i + dayOffset)
+      dates.push(d)
     }
-    return dates;
-  };
+    return dates
+  }
 
-  const selectedCourtName = area.sportsManaged[selectedSport]?.find(c => c.physicalID === selectedCourtID)?.name;
+  const selectedCourtData = area.sportsManaged[selectedSport]?.find(c => c.physicalID === selectedCourtID)
+  const selectedCourtName = selectedCourtData?.name
 
-  const startIdx = TIME_SLOTS.indexOf(startTime);
-  const endIdx = endTime ? TIME_SLOTS.indexOf(endTime) : startIdx;
+  const startIdx = TIME_SLOTS.indexOf(startTime)
+  const endIdx = endTime ? TIME_SLOTS.indexOf(endTime) : startIdx
 
   const calcHours = () => {
-    if (!startTime || !endTime) return 0;
-    return endIdx - startIdx;
-  };
+    if (!startTime || !endTime) return 0
+    return endIdx - startIdx
+  }
+
+  const totalPrice = currentPrice * calcHours()
 
   return (
     <div className="min-h-screen bg-[#030712] text-white pb-40" style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -97,24 +143,26 @@ function PlayAreaDetail() {
 
         {/* ── IMAGE GALLERY ── */}
         <div className="relative h-[42vh] w-full overflow-hidden rounded-3xl border border-white/[0.07] shadow-[0_32px_80px_rgba(0,0,0,0.6)]">
-          <motion.div
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            onDragEnd={onDragEnd}
-            animate={{ x: `-${imgIdx * 100}%` }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="flex h-full w-full cursor-grab active:cursor-grabbing"
-          >
-            {area.images.map((img, i) => (
-              <div key={i} className="w-full h-full shrink-0 relative">
-                <img src={img} alt="arena" className="w-full h-full object-cover pointer-events-none" />
-                {/* image vignette */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#030712] via-transparent to-black/30" />
-              </div>
-            ))}
-          </motion.div>
+          {area.images.length > 0 ? (
+            <motion.div
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              onDragEnd={onDragEnd}
+              animate={{ x: `-${imgIdx * 100}%` }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="flex h-full w-full cursor-grab active:cursor-grabbing"
+            >
+              {area.images.map((img, i) => (
+                <div key={i} className="w-full h-full shrink-0 relative">
+                  <img src={img} alt="arena" className="w-full h-full object-cover pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#030712] via-transparent to-black/30" />
+                </div>
+              ))}
+            </motion.div>
+          ) : (
+            <div className="w-full h-full bg-slate-900 flex items-center justify-center text-6xl">🏟️</div>
+          )}
 
-          {/* BACK BUTTON */}
           <motion.button
             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
             onClick={() => navigate(-1)}
@@ -123,19 +171,20 @@ function PlayAreaDetail() {
             <ChevronLeft size={18} />
           </motion.button>
 
-          {/* IMAGE COUNT BADGE */}
-          <div className="absolute top-4 right-4 z-50 px-3 py-1 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 text-[10px] font-bold text-white/60">
-            {imgIdx + 1} / {area.images.length}
-          </div>
-
-          {/* DOT INDICATORS */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
-            {area.images.map((_, i) => (
-              <button key={i} onClick={() => setImgIdx(i)}
-                className={`h-1 rounded-full transition-all duration-300 ${imgIdx === i ? "w-6 bg-emerald-400" : "w-1.5 bg-white/25"}`}
-              />
-            ))}
-          </div>
+          {area.images.length > 1 && (
+            <>
+              <div className="absolute top-4 right-4 z-50 px-3 py-1 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 text-[10px] font-bold text-white/60">
+                {imgIdx + 1} / {area.images.length}
+              </div>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
+                {area.images.map((_, i) => (
+                  <button key={i} onClick={() => setImgIdx(i)}
+                    className={`h-1 rounded-full transition-all duration-300 ${imgIdx === i ? "w-6 bg-emerald-400" : "w-1.5 bg-white/25"}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── HEADER ── */}
@@ -148,51 +197,60 @@ function PlayAreaDetail() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-[9px] font-bold uppercase tracking-[0.4em] text-emerald-400/80">Open Now</span>
             </div>
-            <h1 className="text-3xl md:text-4xl font-black uppercase leading-none tracking-tight"
-              style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+            <h1 className="text-3xl md:text-4xl font-black uppercase leading-none tracking-tight">
               {area.name}
             </h1>
             <div className="flex items-center gap-1.5 mt-2 text-slate-500">
               <MapPin size={12} className="text-blue-400 shrink-0" />
-              <p className="text-[11px] font-medium tracking-wide">{area.location}</p>
+              <p className="text-[11px] font-medium tracking-wide">{area.city} • {area.location}</p>
             </div>
+            {area.description && (
+              <p className="text-[11px] text-slate-500 mt-2">{area.description}</p>
+            )}
           </div>
 
           <div className="flex gap-2.5 shrink-0">
             <motion.button
               whileTap={{ scale: 0.95 }}
+              onClick={() => window.open(`https://maps.google.com/search?q=${encodeURIComponent(area.name + ' ' + area.location)}`, '_blank')}
               className="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all"
             >
               <MapPin size={13} /> Directions
             </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-emerald-500/20"
-            >
-              <Phone size={13} /> Call
-            </motion.button>
+            {area.phone && (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => window.open(`tel:${area.phone}`)}
+                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-emerald-500/20"
+              >
+                <Phone size={13} /> Call
+              </motion.button>
+            )}
           </div>
         </motion.div>
 
         {/* ── AMENITIES ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="mt-4 bg-white/[0.03] border border-white/[0.07] p-5 rounded-3xl"
-        >
-          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.4em] mb-4">Amenities & Facilities</p>
-          <div className="flex flex-wrap gap-2">
-            {AMENITIES.map((item, i) => (
-              <motion.div
-                key={i} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2 + i * 0.05 }}
-                className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] px-3.5 py-2 rounded-xl hover:border-white/15 transition-colors"
-              >
-                <span className="text-emerald-500">{item.icon}</span>
-                <span className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider">{item.label}</span>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
+        {area.amenities?.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            className="mt-4 bg-white/[0.03] border border-white/[0.07] p-5 rounded-3xl"
+          >
+            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.4em] mb-4">Amenities & Facilities</p>
+            <div className="flex flex-wrap gap-2">
+              {area.amenities.map((amenity, i) => (
+                <motion.div
+                  key={amenity.id}
+                  initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 + i * 0.05 }}
+                  className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] px-3.5 py-2 rounded-xl hover:border-white/15 transition-colors"
+                >
+                  <span>{amenity.emoji}</span>
+                  <span className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider">{amenity.name}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* ── DATE SELECTOR ── */}
         <motion.div
@@ -216,33 +274,26 @@ function PlayAreaDetail() {
               >›</button>
             </div>
           </div>
-
           <div className="grid grid-cols-7 gap-1.5">
             {getDates().map((d, i) => {
-              const isActive = selectedDate.toDateString() === d.toDateString();
-              const isToday = new Date().toDateString() === d.toDateString();
+              const isActive = selectedDate.toDateString() === d.toDateString()
+              const isToday = new Date().toDateString() === d.toDateString()
               return (
                 <motion.button
                   key={i} whileTap={{ scale: 0.93 }}
                   onClick={() => setSelectedDate(d)}
-                  className={`flex flex-col items-center py-3 rounded-2xl border transition-all duration-200 relative overflow-hidden ${
-                    isActive
-                      ? "border-emerald-500/60 bg-emerald-500/10"
-                      : "border-white/[0.06] bg-white/[0.02] hover:border-white/15"
+                  className={`flex flex-col items-center py-3 rounded-2xl border transition-all relative overflow-hidden ${
+                    isActive ? "border-emerald-500/60 bg-emerald-500/10" : "border-white/[0.06] bg-white/[0.02] hover:border-white/15"
                   }`}
                 >
                   {isActive && <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/10 to-transparent" />}
-                  <span className={`text-sm font-black relative z-10 ${isActive ? "text-emerald-400" : "text-white"}`}>
-                    {d.getDate()}
-                  </span>
+                  <span className={`text-sm font-black relative z-10 ${isActive ? "text-emerald-400" : "text-white"}`}>{d.getDate()}</span>
                   <span className={`text-[8px] font-bold uppercase mt-0.5 relative z-10 ${isActive ? "text-emerald-500" : "text-slate-600"}`}>
                     {d.toLocaleDateString('en-GB', { weekday: 'short' })}
                   </span>
-                  {isToday && !isActive && (
-                    <div className="absolute bottom-1.5 w-1 h-1 rounded-full bg-blue-400" />
-                  )}
+                  {isToday && !isActive && <div className="absolute bottom-1.5 w-1 h-1 rounded-full bg-blue-400" />}
                 </motion.button>
-              );
+              )
             })}
           </div>
         </motion.div>
@@ -265,7 +316,7 @@ function PlayAreaDetail() {
                       : "bg-white/[0.04] border border-white/[0.07] text-slate-400 hover:text-white hover:border-white/20"
                   }`}
                 >
-                  {sport}
+                  {area.sports?.find(s => s.name === sport)?.emoji} {sport}
                 </motion.button>
               ))}
             </div>
@@ -280,7 +331,10 @@ function PlayAreaDetail() {
               {area.sportsManaged[selectedSport]?.map(court => (
                 <motion.button
                   key={court.physicalID} whileTap={{ scale: 0.95 }}
-                  onClick={() => setSelectedCourtID(court.physicalID)}
+                  onClick={() => {
+                    setSelectedCourtID(court.physicalID)
+                    setCurrentPrice(court.pricePerHour)
+                  }}
                   className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
                     selectedCourtID === court.physicalID
                       ? "bg-white text-black shadow-lg shadow-white/10"
@@ -288,6 +342,7 @@ function PlayAreaDetail() {
                   }`}
                 >
                   {court.name}
+                  <span className="ml-1 text-emerald-400">₹{court.pricePerHour}/hr</span>
                 </motion.button>
               ))}
             </div>
@@ -310,23 +365,23 @@ function PlayAreaDetail() {
           </div>
 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-            {TIME_SLOTS.map((t, idx) => {
-              const currentIdx = TIME_SLOTS.indexOf(t);
-              const isInRange = startTime && currentIdx >= startIdx && currentIdx <= endIdx;
-              const isStart = t === startTime;
-              const isEnd = t === endTime;
-              const isEdge = isStart || isEnd;
+            {TIME_SLOTS.map((t) => {
+              const currentIdx = TIME_SLOTS.indexOf(t)
+              const isInRange = startTime && currentIdx >= startIdx && currentIdx <= endIdx
+              const isStart = t === startTime
+              const isEnd = t === endTime
+              const isEdge = isStart || isEnd
 
               return (
                 <motion.button
                   key={t} whileTap={{ scale: 0.93 }}
                   onClick={() => {
-                    if (!startTime || endTime) { setStartTime(t); setEndTime(null); }
+                    if (!startTime || endTime) { setStartTime(t); setEndTime(null) }
                     else {
-                      const sIdx = TIME_SLOTS.indexOf(startTime);
-                      const cIdx = TIME_SLOTS.indexOf(t);
-                      if (cIdx <= sIdx) { setStartTime(t); setEndTime(null); }
-                      else setEndTime(t);
+                      const sIdx = TIME_SLOTS.indexOf(startTime)
+                      const cIdx = TIME_SLOTS.indexOf(t)
+                      if (cIdx <= sIdx) { setStartTime(t); setEndTime(null) }
+                      else setEndTime(t)
                     }
                   }}
                   className={`relative py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border overflow-hidden ${
@@ -337,12 +392,10 @@ function PlayAreaDetail() {
                       : "bg-transparent border-white/[0.06] text-slate-500 hover:border-white/20 hover:text-white"
                   }`}
                 >
-                  {isInRange && !isEdge && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5" />
-                  )}
+                  {isInRange && !isEdge && <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5" />}
                   <span className="relative z-10">{t}</span>
                 </motion.button>
-              );
+              )
             })}
           </div>
         </motion.div>
@@ -350,7 +403,6 @@ function PlayAreaDetail() {
 
       {/* ── STICKY FOOTER ── */}
       <div className="fixed bottom-0 left-0 right-0 z-[100]">
-        {/* top border shimmer */}
         <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         <div className="bg-[#030712]/90 backdrop-blur-2xl px-4 py-4">
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
@@ -369,7 +421,7 @@ function PlayAreaDetail() {
               </span>
               {calcHours() > 0 && (
                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">
-                  {calcHours()} hr{calcHours() > 1 ? "s" : ""} · ₹{area.pricePerHour * calcHours()}
+                  {calcHours()} hr{calcHours() > 1 ? "s" : ""} · ₹{totalPrice}
                 </span>
               )}
             </div>
@@ -377,7 +429,17 @@ function PlayAreaDetail() {
             <motion.button
               whileTap={{ scale: 0.96 }}
               disabled={!startTime || !endTime}
-              onClick={() => navigate("/confirm", { state: { area, selectedDate, selectedCourt: selectedCourtID, startTime, endTime, price: area.pricePerHour } })}
+              onClick={() => navigate("/confirm", {
+                state: {
+                  area,
+                  selectedDate,
+                  selectedCourt: selectedCourtID,
+                  startTime,
+                  endTime,
+                  price: totalPrice,
+                  selectedSport
+                }
+              })}
               className="flex items-center gap-2 flex-shrink-0 bg-emerald-500 hover:bg-emerald-400 disabled:bg-white/5 disabled:text-white/20 text-black px-7 py-4 rounded-2xl font-black uppercase text-sm tracking-tight transition-all shadow-xl shadow-emerald-500/20 disabled:shadow-none"
             >
               Confirm & Pay
@@ -387,7 +449,7 @@ function PlayAreaDetail() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 export default PlayAreaDetail;

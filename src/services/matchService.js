@@ -30,6 +30,17 @@ export const createChallenge = async ({
 export const joinChallenge = async (matchId, team) => {
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Prevent joining own challenge
+  const { data: match } = await supabase
+    .from('matches')
+    .select('created_by')
+    .eq('id', matchId)
+    .single()
+
+  if (match?.created_by === user.id) {
+    throw new Error('You cannot join your own challenge')
+  }
+
   // Add to match_players (trigger deducts entry points)
   const { error: joinError } = await supabase
     .from('match_players')
@@ -49,10 +60,10 @@ export const joinChallenge = async (matchId, team) => {
 }
 
 // ── CREATE BOOKING FOR MATCH ──
-  export const createMatchBooking = async ({
+export const createMatchBooking = async ({
   matchId, arenaId, courtId, arenaName, sportType,
   price, challengerId, accepterId, bookingDate,
-  startTime, endTime  
+  startTime, endTime
 }) => {
   const { data, error } = await supabase
     .from('bookings')
@@ -81,13 +92,27 @@ export const joinChallenge = async (matchId, team) => {
 }
 
 // ── MARK PAYMENT DONE ──
+// Verifies booking belongs to user before updating
 // If both paid → auto_confirm_booking trigger fires
 //   → booking status = 'confirmed'
 //     → link_booking_to_match trigger fires
 //       → match.booking_id set
 //       → match status = 'active'
 export const markPaymentDone = async (bookingId, role) => {
+  const { data: { user } } = await supabase.auth.getUser()
+
   const field = role === 'challenger' ? 'paid_by_challenger' : 'paid_by_accepter'
+  const userField = role === 'challenger' ? 'challenger_id' : 'accepter_id'
+
+  // Verify booking belongs to this user
+  const { data: booking } = await supabase
+    .from('bookings')
+    .select('id')
+    .eq('id', bookingId)
+    .eq(userField, user.id)
+    .single()
+
+  if (!booking) throw new Error('Unauthorized: booking does not belong to this user')
 
   const { error } = await supabase
     .from('bookings')
@@ -101,6 +126,16 @@ export const markPaymentDone = async (bookingId, role) => {
 // ↑ Triggers transfer_points_to_winner() automatically
 export const submitResult = async (matchId, winningTeam, score) => {
   const { data: { user } } = await supabase.auth.getUser()
+
+  // Verify user is a player in this match
+  const { data: player } = await supabase
+    .from('match_players')
+    .select('id')
+    .eq('match_id', matchId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (!player) throw new Error('Unauthorized: you are not a player in this match')
 
   const { error } = await supabase
     .from('match_results')
@@ -131,7 +166,7 @@ export const getOpenChallenges = async () => {
       courts (name)
     `)
     .eq('status', 'open')
-    .order('created_at', { ascending: false })
+    .order('match_time', { ascending: true })
 
   if (error) throw error
   return data
@@ -156,4 +191,84 @@ export const getMyMatches = async () => {
 
   if (error) throw error
   return data
+}
+
+// ── GET MATCH BY ID ──
+export const getMatchById = async (matchId) => {
+  const { data, error } = await supabase
+    .from('matches')
+    .select(`
+      *,
+      profiles:created_by (name),
+      arenas (name),
+      courts (name),
+      match_players (user_id, team)
+    `)
+    .eq('id', matchId)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// ── GET MY BOOKINGS ──
+export const getMyBookings = async () => {
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(`
+      *,
+      matches (
+        id,
+        match_type,
+        status,
+        entry_points
+      )
+    `)
+    .or(`challenger_id.eq.${user.id},accepter_id.eq.${user.id}`)
+    .order('booking_date', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+// ── GET BOOKING BY ID ──
+export const getBookingById = async (bookingId) => {
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(`
+      *,
+      matches (
+        id,
+        match_type,
+        status,
+        entry_points,
+        created_by,
+        accepted_by
+      )
+    `)
+    .eq('id', bookingId)
+    .or(`challenger_id.eq.${user.id},accepter_id.eq.${user.id}`)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// ── CANCEL MATCH ──
+export const cancelMatch = async (matchId) => {
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Only creator can cancel
+  const { error } = await supabase
+    .from('matches')
+    .update({ status: 'cancelled', cancelled_by: user.id })
+    .eq('id', matchId)
+    .eq('created_by', user.id)
+
+  if (error) throw error
+  // ↑ refund_on_cancel trigger fires automatically
 }
