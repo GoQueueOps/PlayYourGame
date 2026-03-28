@@ -18,7 +18,6 @@ const slotToHour = (slot) => {
   return hour
 }
 
-// Fetch arena directly with supabase (bypass service for now to debug)
 const fetchArenaFromDB = async (id) => {
   const { data, error } = await supabase
     .from('arenas')
@@ -42,7 +41,6 @@ const fetchArenaFromDB = async (id) => {
 
   if (error) throw error
 
-  // Sort images
   const courtImages = (data.play_area_images || [])
     .filter(img => img.image_type === 'court')
     .sort((a, b) => (a.position || 0) - (b.position || 0))
@@ -52,7 +50,6 @@ const fetchArenaFromDB = async (id) => {
     .sort((a, b) => (a.position || 0) - (b.position || 0))
     .map(img => img.image_url)
 
-  // Build sportsManaged
   const sportsManaged = {}
   const activeCourts = (data.courts || []).filter(c => c.is_active)
   activeCourts.forEach(court => {
@@ -68,12 +65,8 @@ const fetchArenaFromDB = async (id) => {
     })
   })
 
-  const amenities = (data.play_area_amenities || [])
-    .map(pa => pa.amenities).filter(Boolean)
-
-  const sports = (data.arena_sports || [])
-    .map(as => as.sports).filter(Boolean)
-
+  const amenities = (data.play_area_amenities || []).map(pa => pa.amenities).filter(Boolean)
+  const sports = (data.arena_sports || []).map(as => as.sports).filter(Boolean)
   const prices = activeCourts.map(c => c.price_per_hour).filter(Boolean)
   const minPrice = prices.length > 0 ? Math.min(...prices) : 0
 
@@ -113,6 +106,8 @@ function PlayAreaDetail() {
   const [startTime, setStartTime] = useState(null)
   const [endTime, setEndTime] = useState(null)
   const [currentPrice, setCurrentPrice] = useState(0)
+  const [bookedSlots, setBookedSlots] = useState([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
 
   // ── FETCH ARENA ──
   useEffect(() => {
@@ -122,7 +117,6 @@ function PlayAreaDetail() {
       try {
         const data = await fetchArenaFromDB(id)
         setArea(data)
-
         const sportNames = Object.keys(data.sportsManaged || {})
         if (sportNames.length > 0) {
           setSelectedSport(sportNames[0])
@@ -133,13 +127,53 @@ function PlayAreaDetail() {
           }
         }
       } catch (err) {
-        console.error('Fetch arena error:', err)
         setError(err.message)
       }
       setLoading(false)
     }
     fetch()
   }, [id])
+
+  // ── FETCH BOOKED SLOTS ──
+  useEffect(() => {
+    if (!selectedCourtID || !selectedDate) return
+
+    const fetchBookedSlots = async () => {
+      setSlotsLoading(true)
+      const dateStr = selectedDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('start_time, end_time, status')
+        .eq('court_id', selectedCourtID)
+        .eq('booking_date', dateStr)
+        .in('status', ['pending', 'confirmed', 'active', 'payment_verified'])
+
+      if (error) { console.error('Booked slots error:', error); setSlotsLoading(false); return }
+
+      // Collect all booked slot strings
+      const booked = []
+      data.forEach(booking => {
+        const startIdx = TIME_SLOTS.indexOf(booking.start_time)
+        const endIdx = TIME_SLOTS.indexOf(booking.end_time)
+        if (startIdx !== -1 && endIdx !== -1) {
+          for (let i = startIdx; i <= endIdx; i++) {
+            booked.push(TIME_SLOTS[i])
+          }
+        }
+      })
+      setBookedSlots(booked)
+      setSlotsLoading(false)
+
+      // Reset selection if selected slots are now booked
+      if (startTime && booked.includes(startTime)) {
+        setStartTime(null)
+        setEndTime(null)
+      }
+    }
+
+    fetchBookedSlots()
+  }, [selectedCourtID, selectedDate])
 
   // ── UPDATE COURT WHEN SPORT CHANGES ──
   useEffect(() => {
@@ -159,16 +193,12 @@ function PlayAreaDetail() {
     if (!startTime || !area) return
     const hour = slotToHour(startTime)
     const timeStr = `${String(hour).padStart(2, '0')}:00:00`
-
-    // Check pricing rules
     const matchingRule = area.pricingRules?.find(r =>
       timeStr >= r.start_time && timeStr < r.end_time
     )
-
     if (matchingRule) {
       setCurrentPrice(matchingRule.price_per_hour)
     } else {
-      // Fall back to court price
       const court = area.sportsManaged[selectedSport]?.find(c => c.physicalID === selectedCourtID)
       if (court) setCurrentPrice(court.pricePerHour)
     }
@@ -223,6 +253,41 @@ function PlayAreaDetail() {
   }
 
   const totalPrice = currentPrice * calcHours()
+
+  const handleSlotClick = (t) => {
+    const isBooked = bookedSlots.includes(t)
+    if (isBooked) return
+
+    if (!startTime || endTime) {
+      setStartTime(t)
+      setEndTime(null)
+      return
+    }
+
+    const sIdx = TIME_SLOTS.indexOf(startTime)
+    const cIdx = TIME_SLOTS.indexOf(t)
+
+    if (cIdx <= sIdx) {
+      setStartTime(t)
+      setEndTime(null)
+      return
+    }
+
+    // Check if any slot in range is booked
+    const hasBookedInRange = bookedSlots.some(bs => {
+      const bIdx = TIME_SLOTS.indexOf(bs)
+      return bIdx > sIdx && bIdx <= cIdx
+    })
+
+    if (hasBookedInRange) {
+      // Just set new start from this slot
+      setStartTime(t)
+      setEndTime(null)
+      return
+    }
+
+    setEndTime(t)
+  }
 
   return (
     <div className="min-h-screen bg-[#030712] text-white pb-40" style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -381,7 +446,7 @@ function PlayAreaDetail() {
               return (
                 <motion.button
                   key={i} whileTap={{ scale: 0.93 }}
-                  onClick={() => setSelectedDate(d)}
+                  onClick={() => { setSelectedDate(d); setStartTime(null); setEndTime(null) }}
                   className={`flex flex-col items-center py-3 rounded-2xl border transition-all relative overflow-hidden ${
                     isActive ? "border-emerald-500/60 bg-emerald-500/10" : "border-white/[0.06] bg-white/[0.02] hover:border-white/15"
                   }`}
@@ -463,11 +528,16 @@ function PlayAreaDetail() {
             <p className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.4em]">Available Slots</p>
             <div className="flex items-center gap-1.5 text-slate-600">
               <Clock size={11} />
-              <span className="text-[9px] font-bold uppercase tracking-wider">
-                {startTime ? `Tap end time to select range` : `Tap to pick start time`}
-              </span>
+              {slotsLoading ? (
+                <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500">Checking availability...</span>
+              ) : (
+                <span className="text-[9px] font-bold uppercase tracking-wider">
+                  {startTime ? `Tap end time to select range` : `Tap to pick start time`}
+                </span>
+              )}
             </div>
           </div>
+
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
             {TIME_SLOTS.map((t) => {
               const currentIdx = TIME_SLOTS.indexOf(t)
@@ -475,31 +545,51 @@ function PlayAreaDetail() {
               const isStart = t === startTime
               const isEnd = t === endTime
               const isEdge = isStart || isEnd
+              const isBooked = bookedSlots.includes(t)
+
               return (
                 <motion.button
-                  key={t} whileTap={{ scale: 0.93 }}
-                  onClick={() => {
-                    if (!startTime || endTime) { setStartTime(t); setEndTime(null) }
-                    else {
-                      const sIdx = TIME_SLOTS.indexOf(startTime)
-                      const cIdx = TIME_SLOTS.indexOf(t)
-                      if (cIdx <= sIdx) { setStartTime(t); setEndTime(null) }
-                      else setEndTime(t)
-                    }
-                  }}
+                  key={t}
+                  whileTap={{ scale: isBooked ? 1 : 0.93 }}
+                  disabled={isBooked || slotsLoading}
+                  onClick={() => handleSlotClick(t)}
                   className={`relative py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border overflow-hidden ${
-                    isEdge
+                    isBooked
+                      ? "bg-red-500/10 border-red-500/20 text-red-400/40 cursor-not-allowed"
+                      : isEdge
                       ? "bg-emerald-500 border-emerald-500 text-black shadow-md shadow-emerald-500/30"
                       : isInRange
                       ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
                       : "bg-transparent border-white/[0.06] text-slate-500 hover:border-white/20 hover:text-white"
                   }`}
                 >
-                  {isInRange && !isEdge && <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5" />}
-                  <span className="relative z-10">{t}</span>
+                  {isBooked ? (
+                    <span className="text-[8px] text-red-400/60 font-black">BOOKED</span>
+                  ) : (
+                    <>
+                      {isInRange && !isEdge && <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5" />}
+                      <span className="relative z-10">{t}</span>
+                    </>
+                  )}
                 </motion.button>
               )
             })}
+          </div>
+
+          {/* LEGEND */}
+          <div className="flex items-center gap-4 mt-4 pt-4 border-t border-white/5">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-emerald-500 border border-emerald-500" />
+              <span className="text-[8px] text-slate-500 uppercase font-bold">Selected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-red-500/10 border border-red-500/20" />
+              <span className="text-[8px] text-slate-500 uppercase font-bold">Booked</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-white/[0.04] border border-white/[0.06]" />
+              <span className="text-[8px] text-slate-500 uppercase font-bold">Available</span>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -525,7 +615,7 @@ function PlayAreaDetail() {
               {calcHours() > 0 && (
                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">
                   {calcHours()} hr{calcHours() > 1 ? "s" : ""} · ₹{totalPrice}
-                  {area.pricingRules?.length > 0 && startTime && ' (incl. peak pricing)'}
+                  {area.pricingRules?.length > 0 && startTime && ' (peak pricing applied)'}
                 </span>
               )}
             </div>
