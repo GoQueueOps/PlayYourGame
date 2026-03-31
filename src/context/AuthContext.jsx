@@ -5,27 +5,53 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [roleLoading, setRoleLoading] = useState(true);
+
+  const fetchRole = async (userId) => {
+    if (!userId) { setRole(null); setRoleLoading(false); return }
+    const { data } = await supabase
+      .from('user_roles')
+      .select('roles(name)')
+      .eq('user_id', userId)
+      .single()
+    setRole(data?.roles?.name || 'user')
+    setRoleLoading(false)
+  }
 
   useEffect(() => {
-    // Get current session on load
     supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
+      const u = data.session?.user ?? null
+      setUser(u)
+      fetchRole(u?.id)
     });
 
-    // Listen for changes
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null);
+        const u = session?.user ?? null
+        setUser(u)
+        fetchRole(u?.id)
       }
     );
 
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    return () => listener.subscription.unsubscribe();
   }, []);
 
+  const isAdmin = role === 'admin' || role === 'superadmin'
+  const isSuperAdmin = role === 'superadmin'
+  const isOwner = role === 'owner' || role === 'venue_manager'
+  const isVenueManager = role === 'venue_manager'
+
   return (
-    <AuthContext.Provider value={{ user }}>
+    <AuthContext.Provider value={{
+      user,
+      role,
+      roleLoading,
+      isAdmin,
+      isSuperAdmin,
+      isOwner,
+      isVenueManager
+    }}>
       {children}
     </AuthContext.Provider>
   );
