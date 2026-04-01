@@ -15,6 +15,7 @@ function AdminLogin() {
     setError(null)
 
     try {
+      // 1. Sign in
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase().trim(),
         password
@@ -22,19 +23,29 @@ function AdminLogin() {
 
       if (authError) throw authError
 
-      const { data: roleData } = await supabase
+      // 2. Small delay to let session propagate to RLS
+      await new Promise(r => setTimeout(r, 500))
+
+      // 3. Fetch role using maybeSingle to avoid errors
+      const { data: allRoles, error: roleError } = await supabase
         .from('user_roles')
         .select('roles(name)')
         .eq('user_id', data.user.id)
-        .single()
 
-      const userRole = roleData?.roles?.name
-
-      if (userRole !== 'admin' && userRole !== 'superadmin') {
+      if (roleError) {
         await supabase.auth.signOut()
-        throw new Error('Access denied. This portal is for admins only.')
+        throw new Error(`Role fetch failed: ${roleError.message}`)
       }
 
+      const userRole = allRoles?.[0]?.roles?.name
+
+      // 4. Check role
+      if (userRole !== 'admin' && userRole !== 'superadmin') {
+        await supabase.auth.signOut()
+        throw new Error(`Access denied. Your role is "${userRole || 'unknown'}" — must be admin or superadmin.`)
+      }
+
+      // 5. Redirect
       if (userRole === 'superadmin') {
         navigate('/superadmin-portal')
       } else {
@@ -43,9 +54,8 @@ function AdminLogin() {
 
     } catch (err) {
       setError(err.message)
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   return (
