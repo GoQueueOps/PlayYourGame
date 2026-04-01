@@ -15,15 +15,13 @@ function OwnerLogin() {
     setError(null)
 
     try {
-      // 1. Sign in
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.toLowerCase().trim(),
         password
       })
 
       if (authError) throw authError
 
-      // 2. Check role — must be owner or venue_manager
       const { data: roleData } = await supabase
         .from('user_roles')
         .select('roles(name)')
@@ -37,7 +35,6 @@ function OwnerLogin() {
         throw new Error('Access denied. This portal is for arena owners only.')
       }
 
-      // 3. Redirect based on role
       if (userRole === 'venue_manager') {
         navigate('/manager')
       } else {
@@ -54,7 +51,6 @@ function OwnerLogin() {
   return (
     <div className="min-h-screen bg-[#020617] text-white flex flex-col items-center justify-center p-6 italic font-sans relative overflow-hidden">
 
-      {/* BACKGROUND PATTERN */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03] z-0 select-none">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <pattern id="owner-pattern" x="0" y="0" width="160" height="160" patternUnits="userSpaceOnUse">
@@ -67,12 +63,10 @@ function OwnerLogin() {
         </svg>
       </div>
 
-      {/* AMBIENT GLOW */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/10 blur-[150px] rounded-full z-0" />
 
       <div className="w-full max-w-[450px] space-y-10 relative z-10">
 
-        {/* BACK BUTTON */}
         <button
           onClick={() => navigate("/login")}
           className="flex items-center gap-2 text-gray-500 hover:text-emerald-500 transition-all group absolute -top-16 left-0"
@@ -81,7 +75,6 @@ function OwnerLogin() {
           <span className="text-[10px] font-black uppercase tracking-[0.3em]">Exit to Player Portal</span>
         </button>
 
-        {/* HEADER */}
         <div className="text-center space-y-6">
           <div className="relative inline-block">
             <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
@@ -99,7 +92,6 @@ function OwnerLogin() {
           </div>
         </div>
 
-        {/* INPUT AREA */}
         <div className="bg-white/5 border border-white/10 p-8 rounded-[3.5rem] space-y-5 backdrop-blur-3xl shadow-2xl relative">
           <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
 
@@ -112,7 +104,8 @@ function OwnerLogin() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-16 pr-6 outline-none focus:border-blue-500/50 font-black text-[11px] tracking-[0.2em] uppercase transition-all placeholder:text-gray-800"
+                style={{ textTransform: 'none' }}
+                className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-16 pr-6 outline-none focus:border-blue-500/50 font-black text-[11px] tracking-[0.2em] transition-all placeholder:text-gray-800"
               />
             </div>
 
@@ -124,11 +117,10 @@ function OwnerLogin() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-16 pr-6 outline-none focus:border-blue-500/50 font-black text-[11px] tracking-[0.2em] uppercase transition-all placeholder:text-gray-800"
+                className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-16 pr-6 outline-none focus:border-blue-500/50 font-black text-[11px] tracking-[0.2em] transition-all placeholder:text-gray-800"
               />
             </div>
 
-            {/* ERROR */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3">
                 <p className="text-red-400 text-[10px] font-black uppercase tracking-wider">{error}</p>
@@ -152,7 +144,6 @@ function OwnerLogin() {
           </div>
         </div>
 
-        {/* FOOTER */}
         <p className="text-center text-[9px] font-black text-gray-600 uppercase tracking-[0.4em]">
           Forgot Credentials?{" "}
           <span className="text-blue-400 cursor-pointer hover:text-white transition-colors">

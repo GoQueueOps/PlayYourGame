@@ -9,41 +9,30 @@ function AdminLogin() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [debugInfo, setDebugInfo] = useState(null)
 
   const handleLogin = async () => {
     setLoading(true)
     setError(null)
-    setDebugInfo(null)
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.toLowerCase().trim(),
         password
       })
 
       if (authError) throw authError
 
-      console.log('✅ Auth success, User ID:', data.user.id)
-
-      const { data: roleData, error: roleError } = await supabase
+      const { data: roleData } = await supabase
         .from('user_roles')
         .select('roles(name)')
         .eq('user_id', data.user.id)
         .single()
 
-      console.log('📋 Role data:', JSON.stringify(roleData))
-      console.log('❌ Role error:', JSON.stringify(roleError))
-
       const userRole = roleData?.roles?.name
-      console.log('🎭 User role:', userRole)
-
-      // Show debug on screen too
-      setDebugInfo(`UserID: ${data.user.id} | RoleData: ${JSON.stringify(roleData)} | Role: ${userRole} | Error: ${JSON.stringify(roleError)}`)
 
       if (userRole !== 'admin' && userRole !== 'superadmin') {
         await supabase.auth.signOut()
-        throw new Error(`Access denied. Role is: "${userRole}" — must be admin or superadmin.`)
+        throw new Error('Access denied. This portal is for admins only.')
       }
 
       if (userRole === 'superadmin') {
@@ -107,7 +96,8 @@ function AdminLogin() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-16 pr-6 outline-none focus:border-purple-500/50 font-black text-[11px] tracking-[0.2em] uppercase transition-all placeholder:text-gray-800"
+                style={{ textTransform: 'none' }}
+                className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-16 pr-6 outline-none focus:border-purple-500/50 font-black text-[11px] tracking-[0.2em] transition-all placeholder:text-gray-800"
               />
             </div>
 
@@ -119,21 +109,13 @@ function AdminLogin() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-16 pr-6 outline-none focus:border-purple-500/50 font-black text-[11px] tracking-[0.2em] uppercase transition-all placeholder:text-gray-800"
+                className="w-full bg-black/40 border border-white/10 rounded-2xl py-5 pl-16 pr-6 outline-none focus:border-purple-500/50 font-black text-[11px] tracking-[0.2em] transition-all placeholder:text-gray-800"
               />
             </div>
 
-            {/* ERROR */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3">
                 <p className="text-red-400 text-[10px] font-black uppercase tracking-wider">{error}</p>
-              </div>
-            )}
-
-            {/* DEBUG INFO ON SCREEN */}
-            {debugInfo && (
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl px-4 py-3">
-                <p className="text-yellow-400 text-[8px] font-black tracking-wider break-all">{debugInfo}</p>
               </div>
             )}
 
