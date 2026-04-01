@@ -9,13 +9,14 @@ function AdminLogin() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [debugInfo, setDebugInfo] = useState(null)
 
   const handleLogin = async () => {
     setLoading(true)
     setError(null)
+    setDebugInfo(null)
 
     try {
-      // 1. Sign in with Supabase
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -23,22 +24,28 @@ function AdminLogin() {
 
       if (authError) throw authError
 
-      // 2. Check role — must be admin or superadmin
-      const { data: roleData } = await supabase
+      console.log('✅ Auth success, User ID:', data.user.id)
+
+      const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
         .select('roles(name)')
         .eq('user_id', data.user.id)
         .single()
 
+      console.log('📋 Role data:', JSON.stringify(roleData))
+      console.log('❌ Role error:', JSON.stringify(roleError))
+
       const userRole = roleData?.roles?.name
+      console.log('🎭 User role:', userRole)
+
+      // Show debug on screen too
+      setDebugInfo(`UserID: ${data.user.id} | RoleData: ${JSON.stringify(roleData)} | Role: ${userRole} | Error: ${JSON.stringify(roleError)}`)
 
       if (userRole !== 'admin' && userRole !== 'superadmin') {
-        // Sign them out — wrong role
         await supabase.auth.signOut()
-        throw new Error('Access denied. This portal is for admins only.')
+        throw new Error(`Access denied. Role is: "${userRole}" — must be admin or superadmin.`)
       }
 
-      // 3. Redirect based on role
       if (userRole === 'superadmin') {
         navigate('/superadmin-portal')
       } else {
@@ -55,7 +62,6 @@ function AdminLogin() {
   return (
     <div className="min-h-screen bg-[#020617] text-white flex flex-col items-center justify-center p-6 italic font-sans relative overflow-hidden">
 
-      {/* BACKGROUND PATTERN */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03] z-0 select-none">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <pattern id="admin-pattern" x="0" y="0" width="160" height="160" patternUnits="userSpaceOnUse">
@@ -68,12 +74,10 @@ function AdminLogin() {
         </svg>
       </div>
 
-      {/* AMBIENT GLOW */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-600/10 blur-[150px] rounded-full z-0" />
 
       <div className="w-full max-w-[450px] space-y-10 relative z-10">
 
-        {/* HEADER */}
         <div className="text-center space-y-6">
           <div className="relative inline-block">
             <div className="absolute inset-0 bg-purple-500/20 blur-3xl rounded-full" />
@@ -91,7 +95,6 @@ function AdminLogin() {
           </div>
         </div>
 
-        {/* INPUT AREA */}
         <div className="bg-white/5 border border-white/10 p-8 rounded-[3.5rem] space-y-5 backdrop-blur-3xl shadow-2xl relative">
           <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
 
@@ -127,6 +130,13 @@ function AdminLogin() {
               </div>
             )}
 
+            {/* DEBUG INFO ON SCREEN */}
+            {debugInfo && (
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl px-4 py-3">
+                <p className="text-yellow-400 text-[8px] font-black tracking-wider break-all">{debugInfo}</p>
+              </div>
+            )}
+
             <button
               onClick={handleLogin}
               disabled={loading || !email || !password}
@@ -144,7 +154,6 @@ function AdminLogin() {
           </div>
         </div>
 
-        {/* FOOTER */}
         <button
           onClick={() => navigate("/login")}
           className="flex items-center justify-center gap-3 w-full text-[10px] font-black text-gray-600 uppercase tracking-[0.4em] hover:text-white transition-all group/back"
