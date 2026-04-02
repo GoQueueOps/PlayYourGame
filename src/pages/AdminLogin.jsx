@@ -23,29 +23,42 @@ function AdminLogin() {
 
       if (authError) throw authError
 
-      // 2. Small delay to let session propagate to RLS
+      // 2. Small delay to let session propagate
       await new Promise(r => setTimeout(r, 500))
 
-      // 3. Fetch role using maybeSingle to avoid errors
-      const { data: allRoles, error: roleError } = await supabase
+      // 3. Fetch role_id from user_roles
+      const { data: userRoleRow, error: urError } = await supabase
         .from('user_roles')
-        .select('roles(name)')
+        .select('role_id')
         .eq('user_id', data.user.id)
+        .single()
 
-      if (roleError) {
+      if (urError || !userRoleRow) {
         await supabase.auth.signOut()
-        throw new Error(`Role fetch failed: ${roleError.message}`)
+        throw new Error(`Could not fetch role. ${urError?.message || 'No role found.'}`)
       }
 
-      const userRole = allRoles?.[0]?.roles?.name
+      // 4. Fetch role name from roles using role_id
+      const { data: roleRow, error: rError } = await supabase
+        .from('roles')
+        .select('name')
+        .eq('id', userRoleRow.role_id)
+        .single()
 
-      // 4. Check role
+      if (rError || !roleRow) {
+        await supabase.auth.signOut()
+        throw new Error(`Could not fetch role name. ${rError?.message}`)
+      }
+
+      const userRole = roleRow.name
+
+      // 5. Check role
       if (userRole !== 'admin' && userRole !== 'superadmin') {
         await supabase.auth.signOut()
-        throw new Error(`Access denied. Your role is "${userRole || 'unknown'}" — must be admin or superadmin.`)
+        throw new Error(`Access denied. Your role is "${userRole}" — must be admin or superadmin.`)
       }
 
-      // 5. Redirect
+      // 6. Redirect
       if (userRole === 'superadmin') {
         navigate('/superadmin-portal')
       } else {
