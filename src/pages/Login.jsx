@@ -9,6 +9,8 @@ function Login() {
   const [loginMethod, setLoginMethod] = useState("phone");
   const [otpSent, setOtpSent] = useState(false);
   const [emailExists, setEmailExists] = useState(true);
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,104 +18,139 @@ function Login() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // ─── PHONE AUTH FLOW ────────────────────────────────
+  // ── ROLE BASED REDIRECT ──
+  const redirectByRole = async (userId) => {
+    await new Promise(r => setTimeout(r, 300))
 
+    const { data: userRoleRow } = await supabase
+      .from('user_roles')
+      .select('role_id')
+      .eq('user_id', userId)
+      .single()
+
+    if (!userRoleRow) { navigate('/booking'); return }
+
+    const { data: roleRow } = await supabase
+      .from('roles')
+      .select('name')
+      .eq('id', userRoleRow.role_id)
+      .single()
+
+    const role = roleRow?.name
+
+    if (role === 'superadmin') navigate('/superadmin-portal')
+    else if (role === 'admin') navigate('/admin')
+    else if (role === 'owner') navigate('/owner')
+    else if (role === 'venue_manager') navigate('/manager')
+    else navigate('/booking')
+  }
+
+  // ── PHONE AUTH ──
   const handleSendOTP = async () => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` });
-    if (error) alert(error.message);
-    else setOtpSent(true);
-    setLoading(false);
-  };
+    setLoading(true)
+    setError(null)
+    const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` })
+    if (error) setError(error.message)
+    else setOtpSent(true)
+    setLoading(false)
+  }
 
   const handleVerifyOTP = async () => {
-    setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
+    setLoading(true)
+    setError(null)
+    const { data, error } = await supabase.auth.verifyOtp({
       phone: `+91${phone}`,
       token: otp,
       type: "sms",
-    });
-    if (error) alert(error.message);
-    else navigate("/");
-    setLoading(false);
-  };
+    })
+    if (error) setError(error.message)
+    else await redirectByRole(data.user.id)
+    setLoading(false)
+  }
 
-  // ─── EMAIL AUTH FLOW ────────────────────────────────
-
+  // ── EMAIL AUTH ──
   const handleEmailAction = async () => {
-    setLoading(true);
+    setLoading(true)
+    setError(null)
 
     if (emailExists) {
-      // 🔐 LOGIN
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        alert(error.message);
-        setLoading(false);
-        return;
-      }
-      navigate("/");
-      setLoading(false);
-      return;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
+        password
+      })
+      if (error) { setError(error.message); setLoading(false); return }
+      await redirectByRole(data.user.id)
+      setLoading(false)
+      return
     }
 
-    // 🆕 SIGNUP
+    // Signup
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.toLowerCase().trim(),
       password,
-      options: {
-        data: { name: fullName }, // ← was full_name, profiles table uses 'name'
-      },
-    });
+      options: { data: { name: fullName } },
+    })
 
-    if (error) {
-      alert(error.message);
-      setLoading(false);
-      return;
-    }
+    if (error) { setError(error.message); setLoading(false); return }
 
     if (data?.user) {
-      // ── Insert only columns that exist in your profiles table ──
-      // Schema: id, created_date, name, city, state, country, last_name_change, athlete_id
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert([
-          {
-            id: data.user.id,  // FK → auth.users.id
-            name: fullName,    // ← was full_name (column does not exist)
-            city: "",
-            state: "",
-            country: "",
-          },
-        ]);
-
-      if (profileError) {
-        console.error("Profile insert error:", profileError.message);
-        // Don't block the user — auth account was created successfully
-      }
+      await supabase.from("profiles").upsert({
+        id: data.user.id,
+        name: fullName,
+        email: email.toLowerCase().trim(),
+        city: "",
+        state: "",
+        country: "",
+      })
     }
 
-    alert("Account created! Check your email to confirm.");
-    navigate("/");
-    setLoading(false);
-  };
+    setError(null)
+    alert("Account created! Check your email to confirm.")
+    navigate("/booking")
+    setLoading(false)
+  }
 
-  // ─── SOCIAL AUTH ────────────────────────────────────
+  // ── FORGOT PASSWORD ──
+  const handleForgotPassword = async () => {
+    if (!email) { setError("Please enter your email first"); return }
+    setLoading(true)
+    setError(null)
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      email.toLowerCase().trim(),
+      { redirectTo: `${window.location.origin}/reset-password` }
+    )
+    if (error) setError(error.message)
+    else setResetSent(true)
+    setLoading(false)
+  }
 
+  // ── GOOGLE AUTH ──
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin },
-    });
-  };
+    })
+  }
+
+  // ── ENTER KEY HANDLER ──
+  const handleKeyDown = (e) => {
+    if (e.key !== 'Enter') return
+    if (loginMethod === 'phone') {
+      if (!otpSent) handleSendOTP()
+      else handleVerifyOTP()
+    } else {
+      if (forgotPassword) handleForgotPassword()
+      else handleEmailAction()
+    }
+  }
 
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap');
-
         * { box-sizing: border-box; }
-
         .login-root {
           min-height: 100svh;
           background: #050811;
@@ -127,7 +164,6 @@ function Login() {
           position: relative;
           overflow: hidden;
         }
-
         .login-root::before {
           content: '';
           position: fixed;
@@ -151,14 +187,7 @@ function Login() {
           pointer-events: none;
           z-index: 0;
         }
-
-        .login-card {
-          width: 100%;
-          max-width: 400px;
-          position: relative;
-          z-index: 1;
-        }
-
+        .login-card { width: 100%; max-width: 400px; position: relative; z-index: 1; }
         .hero-title {
           font-family: 'Bebas Neue', sans-serif;
           font-size: 72px;
@@ -186,7 +215,6 @@ function Login() {
           text-align: center;
           margin-top: 10px;
         }
-
         .field-label {
           font-size: 9px;
           font-weight: 700;
@@ -197,7 +225,6 @@ function Login() {
           margin-bottom: 8px;
           margin-left: 4px;
         }
-
         .glass-input {
           width: 100%;
           background: rgba(255,255,255,0.04);
@@ -217,14 +244,7 @@ function Login() {
           background: rgba(34,197,94,0.04);
           box-shadow: 0 0 0 3px rgba(34,197,94,0.08);
         }
-
-        .otp-input {
-          text-align: center;
-          font-size: 26px;
-          letter-spacing: 0.5em;
-          font-weight: 900;
-        }
-
+        .otp-input { text-align: center; font-size: 26px; letter-spacing: 0.5em; font-weight: 900; }
         .tab-pill {
           display: flex;
           background: rgba(255,255,255,0.04);
@@ -247,17 +267,8 @@ function Login() {
           background: transparent;
           color: #4b5563;
         }
-        .tab-btn.active-login {
-          background: linear-gradient(135deg, #22c55e, #16a34a);
-          color: #000;
-          box-shadow: 0 4px 16px rgba(34,197,94,0.3);
-        }
-        .tab-btn.active-signup {
-          background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-          color: #fff;
-          box-shadow: 0 4px 16px rgba(59,130,246,0.3);
-        }
-
+        .tab-btn.active-login { background: linear-gradient(135deg, #22c55e, #16a34a); color: #000; box-shadow: 0 4px 16px rgba(34,197,94,0.3); }
+        .tab-btn.active-signup { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; box-shadow: 0 4px 16px rgba(59,130,246,0.3); }
         .btn-primary-green {
           width: 100%;
           background: linear-gradient(135deg, #22c55e, #16a34a);
@@ -270,20 +281,12 @@ function Login() {
           border: none;
           cursor: pointer;
           box-shadow: 0 8px 32px rgba(34,197,94,0.25), 0 0 0 1px rgba(34,197,94,0.2);
-          transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+          transition: transform 0.15s, opacity 0.15s;
           position: relative;
           overflow: hidden;
         }
-        .btn-primary-green::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 60%);
-          pointer-events: none;
-        }
         .btn-primary-green:active { transform: scale(0.97); }
         .btn-primary-green:disabled { opacity: 0.4; cursor: not-allowed; }
-
         .btn-primary-blue {
           width: 100%;
           background: linear-gradient(135deg, #3b82f6, #1d4ed8);
@@ -295,21 +298,11 @@ function Login() {
           letter-spacing: 2px;
           border: none;
           cursor: pointer;
-          box-shadow: 0 8px 32px rgba(59,130,246,0.25), 0 0 0 1px rgba(59,130,246,0.2);
-          transition: transform 0.15s, box-shadow 0.15s;
-          position: relative;
-          overflow: hidden;
-        }
-        .btn-primary-blue::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 60%);
-          pointer-events: none;
+          box-shadow: 0 8px 32px rgba(59,130,246,0.25);
+          transition: transform 0.15s;
         }
         .btn-primary-blue:active { transform: scale(0.97); }
         .btn-primary-blue:disabled { opacity: 0.4; cursor: not-allowed; }
-
         .btn-ghost {
           background: transparent;
           border: none;
@@ -324,25 +317,24 @@ function Login() {
           transition: color 0.2s;
         }
         .btn-ghost:hover { color: #9ca3af; }
-
-        .divider-wrap {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-        .divider-line {
-          flex: 1;
-          height: 1px;
-          background: rgba(255,255,255,0.05);
-        }
-        .divider-text {
+        .btn-forgot {
+          background: transparent;
+          border: none;
+          color: #3b82f6;
           font-size: 9px;
           font-weight: 800;
-          letter-spacing: 0.3em;
+          letter-spacing: 0.2em;
           text-transform: uppercase;
-          color: #1f2937;
+          cursor: pointer;
+          padding: 4px 0;
+          transition: color 0.2s;
+          text-align: right;
+          width: 100%;
         }
-
+        .btn-forgot:hover { color: #60a5fa; }
+        .divider-wrap { display: flex; align-items: center; gap: 16px; }
+        .divider-line { flex: 1; height: 1px; background: rgba(255,255,255,0.05); }
+        .divider-text { font-size: 9px; font-weight: 800; letter-spacing: 0.3em; text-transform: uppercase; color: #1f2937; }
         .alt-btn {
           background: rgba(255,255,255,0.04);
           border: 1px solid rgba(255,255,255,0.08);
@@ -358,58 +350,17 @@ function Login() {
         }
         .alt-btn:active { transform: scale(0.96); }
         .alt-btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.15); }
-        .alt-btn-label {
-          font-size: 9px;
-          font-weight: 800;
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
-          color: #6b7280;
-        }
-
-        .biz-card {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.05);
-          border-radius: 24px;
-          padding: 16px;
-        }
-        .biz-title {
-          font-size: 8px;
-          font-weight: 800;
-          letter-spacing: 0.35em;
-          text-transform: uppercase;
-          color: #374151;
-          text-align: center;
-          margin-bottom: 10px;
-        }
-        .biz-btn {
-          flex: 1;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 12px;
-          padding: 12px;
-          font-size: 9px;
-          font-weight: 800;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
+        .alt-btn-label { font-size: 9px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: #6b7280; }
+        .biz-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; padding: 16px; }
+        .biz-title { font-size: 8px; font-weight: 800; letter-spacing: 0.35em; text-transform: uppercase; color: #374151; text-align: center; margin-bottom: 10px; }
+        .biz-btn { flex: 1; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; transition: background 0.2s; }
         .biz-btn.owner { color: #60a5fa; }
         .biz-btn.owner:hover { background: rgba(96,165,250,0.1); }
         .biz-btn.admin { color: #c084fc; }
         .biz-btn.admin:hover { background: rgba(192,132,252,0.1); }
-
-        .prefix-box {
-          background: rgba(255,255,255,0.05);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 16px;
-          padding: 16px 16px;
-          font-weight: 800;
-          font-size: 14px;
-          color: #9ca3af;
-          white-space: nowrap;
-        }
-
+        .prefix-box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; font-weight: 800; font-size: 14px; color: #9ca3af; white-space: nowrap; }
+        .error-box { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 12px; padding: 12px 16px; color: #f87171; font-size: 11px; font-weight: 700; }
+        .success-box { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2); border-radius: 12px; padding: 12px 16px; color: #4ade80; font-size: 11px; font-weight: 700; }
         .space-y-3 > * + * { margin-top: 12px; }
         .space-y-4 > * + * { margin-top: 16px; }
         .space-y-6 > * + * { margin-top: 24px; }
@@ -426,183 +377,224 @@ function Login() {
       <div className="login-root">
         <div className="login-card space-y-10">
 
-          {/* ── Hero ── */}
+          {/* HERO */}
           <div className="text-center">
             <h1 className="hero-title">
               READY <span className="hero-accent">UP ⚡</span>
             </h1>
             <p className="hero-sub">
-              {loading ? "Processing..." : otpSent ? "Enter the code sent to your phone" : "Authenticate to Play"}
+              {loading ? "Processing..." : forgotPassword ? "Reset your password" : otpSent ? "Enter the code sent to your phone" : "Authenticate to Play"}
             </p>
           </div>
 
-          {/* ── Auth Forms ── */}
-          <AnimatePresence mode="wait">
-            {loginMethod === "phone" ? (
-              <motion.div
-                key="phone"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.22 }}
-                className="space-y-4"
-              >
-                {!otpSent ? (
-                  <>
-                    <div>
-                      <label className="field-label">Mobile Number</label>
-                      <div className="flex gap-2">
-                        <div className="prefix-box">+91</div>
+          {/* ERROR */}
+          {error && <div className="error-box">{error}</div>}
+
+          {/* FORGOT PASSWORD FLOW */}
+          {forgotPassword ? (
+            <motion.div
+              key="forgot"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="space-y-4"
+            >
+              {resetSent ? (
+                <div className="success-box text-center">
+                  ✅ Reset link sent to {email}. Check your inbox!
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="field-label">Your Email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="name@example.com"
+                      className="glass-input"
+                    />
+                  </div>
+                  <button onClick={handleForgotPassword} disabled={loading || !email} className="btn-primary-green">
+                    {loading ? "Sending..." : "Send Reset Link →"}
+                  </button>
+                </>
+              )}
+              <button onClick={() => { setForgotPassword(false); setResetSent(false) }} className="btn-ghost">
+                ← Back to Login
+              </button>
+            </motion.div>
+          ) : (
+            <AnimatePresence mode="wait">
+              {/* PHONE FLOW */}
+              {loginMethod === "phone" ? (
+                <motion.div
+                  key="phone"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.22 }}
+                  className="space-y-4"
+                >
+                  {!otpSent ? (
+                    <>
+                      <div>
+                        <label className="field-label">Mobile Number</label>
+                        <div className="flex gap-2">
+                          <div className="prefix-box">+91</div>
+                          <input
+                            type="tel"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder="00000 00000"
+                            className="glass-input flex-1"
+                          />
+                        </div>
+                      </div>
+                      <button disabled={loading || !phone} onClick={handleSendOTP} className="btn-primary-green">
+                        {loading ? "Sending..." : "Send OTP →"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="field-label">Enter OTP</label>
                         <input
-                          type="tel"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="00000 00000"
-                          className="glass-input flex-1"
+                          type="text"
+                          maxLength="6"
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder="• • • • • •"
+                          className="glass-input otp-input"
+                          autoFocus
                         />
                       </div>
-                    </div>
-                    <button disabled={loading} onClick={handleSendOTP} className="btn-primary-green">
-                      {loading ? "Sending..." : "Send OTP →"}
+                      <button onClick={handleVerifyOTP} disabled={loading || !otp} className="btn-primary-green">
+                        {loading ? "Verifying..." : "Verify & Login"}
+                      </button>
+                      <button onClick={() => setOtpSent(false)} className="btn-ghost">← Change Number</button>
+                    </>
+                  )}
+                </motion.div>
+              ) : (
+                /* EMAIL FLOW */
+                <motion.div
+                  key="email"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.22 }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="field-label">Email Address</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="name@example.com"
+                      className="glass-input"
+                    />
+                  </div>
+
+                  <div className="tab-pill">
+                    <button onClick={() => setEmailExists(true)} className={`tab-btn ${emailExists ? "active-login" : ""}`}>
+                      I Have an Account
                     </button>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="field-label">Enter OTP</label>
+                    <button onClick={() => setEmailExists(false)} className={`tab-btn ${emailExists === false ? "active-signup" : ""}`}>
+                      I'm New Here
+                    </button>
+                  </div>
+
+                  {emailExists === true && (
+                    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Password"
+                        className="glass-input"
+                      />
+                      <button onClick={() => setForgotPassword(true)} className="btn-forgot">
+                        Forgot Password?
+                      </button>
+                    </motion.div>
+                  )}
+
+                  {emailExists === false && (
+                    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                       <input
                         type="text"
-                        maxLength="6"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        placeholder="• • • • • •"
-                        className="glass-input otp-input"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Full Name"
+                        className="glass-input"
                       />
-                    </div>
-                    <button onClick={handleVerifyOTP} disabled={loading} className="btn-primary-green">
-                      {loading ? "Verifying..." : "Verify & Login"}
-                    </button>
-                    <button onClick={() => setOtpSent(false)} className="btn-ghost">
-                      ← Change Number
-                    </button>
-                  </>
-                )}
-              </motion.div>
-            ) : (
-              <motion.div
-                key="email"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.22 }}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="field-label">Email Address</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    className="glass-input"
-                  />
-                </div>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Create Password"
+                        className="glass-input"
+                      />
+                    </motion.div>
+                  )}
 
-                {/* Pill toggle */}
-                <div className="tab-pill">
                   <button
-                    onClick={() => setEmailExists(true)}
-                    className={`tab-btn ${emailExists ? "active-login" : ""}`}
+                    onClick={handleEmailAction}
+                    disabled={loading}
+                    className={emailExists === false ? "btn-primary-blue" : "btn-primary-green"}
                   >
-                    I Have an Account
+                    {loading ? "Please wait..." : emailExists === false ? "Create Account" : "Continue →"}
                   </button>
-                  <button
-                    onClick={() => setEmailExists(false)}
-                    className={`tab-btn ${emailExists === false ? "active-signup" : ""}`}
-                  >
-                    I'm New Here
-                  </button>
-                </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
 
-                {emailExists === true && (
-                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Password"
-                      className="glass-input"
-                    />
-                  </motion.div>
-                )}
-
-                {emailExists === false && (
-                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                    <input
-                      type="text"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Full Name"
-                      className="glass-input"
-                    />
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Create Password"
-                      className="glass-input"
-                    />
-                  </motion.div>
-                )}
-
-                <button
-                  onClick={handleEmailAction}
-                  disabled={loading}
-                  className={emailExists === false ? "btn-primary-blue" : "btn-primary-green"}
-                >
-                  {loading ? "Please wait..." : emailExists === false ? "Create Account" : "Continue →"}
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* ── Alternatives ── */}
-          <div className="space-y-4">
-            <div className="divider-wrap">
-              <div className="divider-line" />
-              <span className="divider-text">Alternative</span>
-              <div className="divider-line" />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={handleGoogleLogin} className="alt-btn">
-                <span style={{ fontSize: 18 }}>🌐</span>
-                <span className="alt-btn-label">Google</span>
-              </button>
-              <button
-                onClick={() => {
-                  setLoginMethod(loginMethod === "phone" ? "email" : "phone");
-                  setOtpSent(false);
-                  setEmailExists(true);
-                }}
-                className="alt-btn"
-              >
-                <span style={{ fontSize: 18 }}>{loginMethod === "phone" ? "📧" : "📱"}</span>
-                <span className="alt-btn-label">{loginMethod === "phone" ? "Email" : "Phone"}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* ── Business Portal ── */}
-          <div className="pt-8">
-            <div className="biz-card">
-              <p className="biz-title">Business Portal</p>
+          {/* ALTERNATIVES */}
+          {!forgotPassword && (
+            <div className="space-y-4">
+              <div className="divider-wrap">
+                <div className="divider-line" />
+                <span className="divider-text">Alternative</span>
+                <div className="divider-line" />
+              </div>
               <div className="flex gap-3">
-                <button onClick={() => navigate("/owner-login")} className="biz-btn owner">Owner</button>
-                <button onClick={() => navigate("/admin-login")} className="biz-btn admin">Admin</button>
+                <button onClick={handleGoogleLogin} className="alt-btn">
+                  <span style={{ fontSize: 18 }}>🌐</span>
+                  <span className="alt-btn-label">Google</span>
+                </button>
+                <button
+                  onClick={() => { setLoginMethod(loginMethod === "phone" ? "email" : "phone"); setOtpSent(false); setEmailExists(true); setError(null) }}
+                  className="alt-btn"
+                >
+                  <span style={{ fontSize: 18 }}>{loginMethod === "phone" ? "📧" : "📱"}</span>
+                  <span className="alt-btn-label">{loginMethod === "phone" ? "Email" : "Phone"}</span>
+                </button>
               </div>
             </div>
-          </div>
+          )}
 
+          {/* BUSINESS PORTAL */}
+          {!forgotPassword && (
+            <div className="pt-8">
+              <div className="biz-card">
+                <p className="biz-title">Business Portal</p>
+                <div className="flex gap-3">
+                  <button onClick={() => navigate("/owner-login")} className="biz-btn owner">Owner</button>
+                  <button onClick={() => navigate("/admin-login")} className="biz-btn admin">Admin</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
