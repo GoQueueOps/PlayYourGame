@@ -15,6 +15,7 @@ function OwnerLogin() {
     setError(null)
 
     try {
+      // 1. Sign in
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase().trim(),
         password
@@ -22,19 +23,42 @@ function OwnerLogin() {
 
       if (authError) throw authError
 
-      const { data: roleData } = await supabase
+      // 2. Small delay to let session propagate
+      await new Promise(r => setTimeout(r, 500))
+
+      // 3. Fetch role_id from user_roles
+      const { data: userRoleRow, error: urError } = await supabase
         .from('user_roles')
-        .select('roles(name)')
+        .select('role_id')
         .eq('user_id', data.user.id)
         .single()
 
-      const userRole = roleData?.roles?.name
-
-      if (userRole !== 'owner' && userRole !== 'venue_manager') {
+      if (urError || !userRoleRow) {
         await supabase.auth.signOut()
-        throw new Error('Access denied. This portal is for arena owners only.')
+        throw new Error(`Could not fetch role. ${urError?.message || 'No role found.'}`)
       }
 
+      // 4. Fetch role name from roles using role_id
+      const { data: roleRow, error: rError } = await supabase
+        .from('roles')
+        .select('name')
+        .eq('id', userRoleRow.role_id)
+        .single()
+
+      if (rError || !roleRow) {
+        await supabase.auth.signOut()
+        throw new Error(`Could not fetch role name. ${rError?.message}`)
+      }
+
+      const userRole = roleRow.name
+
+      // 5. Check role
+      if (userRole !== 'owner' && userRole !== 'venue_manager') {
+        await supabase.auth.signOut()
+        throw new Error(`Access denied. Your role is "${userRole}" — must be owner or venue manager.`)
+      }
+
+      // 6. Redirect
       if (userRole === 'venue_manager') {
         navigate('/manager')
       } else {
@@ -43,9 +67,8 @@ function OwnerLogin() {
 
     } catch (err) {
       setError(err.message)
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   return (
