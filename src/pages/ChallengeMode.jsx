@@ -19,19 +19,34 @@ function parseMatchType(matchType = "") {
 function ArenaLegendsSection() {
   const navigate = useNavigate();
   const [boardType, setBoardType] = useState("Lobby");
+  const [leaderboard, setLeaderboard] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const leaderboardData = {
-    Solo: [
-      { rank: 1, name: "Nitro",        score: 2840, matches: 58,  wins: 45 },
-      { rank: 2, name: "Z-Storm",      score: 2610, matches: 40,  wins: 32 },
-      { rank: 3, name: "Shadow",       score: 2450, matches: 35,  wins: 20 },
-    ],
-    Lobby: [
-      { rank: 1, name: "CDA Strikers", score: 8900, matches: 120, wins: 95 },
-      { rank: 2, name: "City FC",      score: 7200, matches: 98,  wins: 85 },
-      { rank: 3, name: "BBS Smashers", score: 6800, matches: 80,  wins: 60 },
-    ]
-  };
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      const { data } = await supabase
+        .from('leaderboards')
+        .select(`
+          user_id,
+          matches_played,
+          matches_won,
+          g_points,
+          rank,
+          profiles (name)
+        `)
+        .order('g_points', { ascending: false })
+        .limit(3)
+      if (data) setLeaderboard(data)
+      setLoading(false)
+    }
+    fetchLeaderboard()
+  }, [])
+
+  const rankIcons = [
+    <Trophy key={1} className="text-yellow-500 mx-auto" size={32} />,
+    <Medal key={2} className="text-slate-300 mx-auto" size={28} />,
+    <Medal key={3} className="text-orange-700 mx-auto" size={28} />
+  ]
 
   return (
     <div className="max-w-6xl mx-auto mt-20 relative z-10 pb-20 font-sans italic font-black uppercase">
@@ -57,45 +72,50 @@ function ArenaLegendsSection() {
           </div>
         </div>
       </div>
+
       <div className="bg-[#0b0f1a] border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl">
-        {leaderboardData[boardType].map((item) => (
-          <div key={item.name} className="flex items-center justify-between p-8 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-all">
-            <div className="flex items-center gap-8">
-              <div className="w-12 text-center">
-                {item.rank === 1
-                  ? <Trophy className="text-yellow-500 mx-auto" size={32} />
-                  : <Medal className={item.rank === 2 ? "text-slate-300 mx-auto" : "text-orange-700 mx-auto"} size={28} />
-                }
-              </div>
-              <div className="text-left">
-                <h4 className="text-2xl text-white flex items-center gap-2">
-                  {item.name} {item.rank === 1 && <Star size={16} className="text-yellow-500 fill-yellow-500" />}
-                </h4>
-                <div className="flex items-center gap-4 mt-1">
-                  <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                    <Gamepad2 size={10} className="drop-shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
-                    {item.score} G-PTS
-                  </span>
-                  <span className="text-[9px] text-slate-500">
-                    <Target size={10} className="inline mr-1" />{item.matches} Matches
-                  </span>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin text-emerald-500" size={32} />
+          </div>
+        ) : leaderboard.length === 0 ? (
+          <div className="text-center py-12 text-slate-600 text-[10px] tracking-widest">
+            No leaderboard data yet
+          </div>
+        ) : (
+          leaderboard.map((item, idx) => (
+            <div key={item.user_id} className="flex items-center justify-between p-8 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-all">
+              <div className="flex items-center gap-8">
+                <div className="w-12 text-center">{rankIcons[idx]}</div>
+                <div className="text-left">
+                  <h4 className="text-2xl text-white flex items-center gap-2">
+                    {item.profiles?.name || 'Player'} {idx === 0 && <Star size={16} className="text-yellow-500 fill-yellow-500" />}
+                  </h4>
+                  <div className="flex items-center gap-4 mt-1">
+                    <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                      <Gamepad2 size={10} />{item.g_points || 0} G-PTS
+                    </span>
+                    <span className="text-[9px] text-slate-500">
+                      <Target size={10} className="inline mr-1" />{item.matches_played || 0} Matches
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-10">
-              <div className="text-right hidden sm:block">
-                <p className="text-[9px] text-slate-500 mb-1">Wins</p>
-                <p className="text-xl text-white">{item.wins} WINS</p>
+              <div className="flex items-center gap-10">
+                <div className="text-right hidden sm:block">
+                  <p className="text-[9px] text-slate-500 mb-1">Wins</p>
+                  <p className="text-xl text-white">{item.matches_won || 0} WINS</p>
+                </div>
+                <button onClick={() => navigate("/arena-legends")} className="bg-white/5 border border-white/10 px-8 py-4 rounded-2xl text-[10px] text-white hover:bg-white hover:text-black transition-all">
+                  Profile
+                </button>
               </div>
-              <button onClick={() => navigate("/arena-legends")} className="bg-white/5 border border-white/10 px-8 py-4 rounded-2xl text-[10px] text-white hover:bg-white hover:text-black transition-all">
-                Profile
-              </button>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
-  );
+  )
 }
 
 function ChallengeMode() {
@@ -106,15 +126,13 @@ function ChallengeMode() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [acceptingId, setAcceptingId] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [gPointsBalance, setGPointsBalance] = useState(null); // null = loading
+  const [gPointsBalance, setGPointsBalance] = useState(null);
 
-  // ── Get current user + wallet balance on mount ──
   useEffect(() => {
     const init = async () => {
       const { data: authData } = await supabase.auth.getSession();
       const uid = authData?.session?.user?.id || null;
       setCurrentUserId(uid);
-
       if (uid) {
         const { data: wallet } = await supabase
           .from("wallet")
@@ -133,16 +151,8 @@ function ChallengeMode() {
       const { data, error } = await supabase
         .from("matches")
         .select(`
-          id,
-          created_by,
-          accepted_by,
-          match_type,
-          status,
-          match_time,
-          created_at,
-          max_players,
-          entry_points,
-          arena_id,
+          id, created_by, accepted_by, match_type, status,
+          match_time, created_at, max_players, entry_points, arena_id,
           arena:arenas!matches_arena_fkey ( name )
         `)
         .like("match_type", "challenge_%")
@@ -151,7 +161,6 @@ function ChallengeMode() {
 
       if (error) throw error;
 
-      // ── Fetch profiles separately — matches_created_by_fkey → auth.users not profiles ──
       const creatorIds = [...new Set((data || []).map((m) => m.created_by).filter(Boolean))];
       let profileMap = {};
       if (creatorIds.length > 0) {
@@ -162,10 +171,9 @@ function ChallengeMode() {
         (profileData || []).forEach((p) => { profileMap[p.id] = p.name; });
       }
 
-      // Attach player name to each match
       const enriched = (data || []).map((m) => ({
         ...m,
-        player: { name: profileMap[m.created_by] || null },
+        player: { name: profileMap[m.created_by] || "Unknown" },
       }));
       setChallenges(enriched);
     } catch (err) {
@@ -177,71 +185,70 @@ function ChallengeMode() {
 
   useEffect(() => { fetchChallenges(); }, []);
 
+  // Realtime updates for new challenges
+  useEffect(() => {
+    const channel = supabase
+      .channel('open_challenges')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'matches'
+      }, () => {
+        fetchChallenges()
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [])
+
   const handleChallengeCreated = (newMatch) => {
     setChallenges((prev) => [newMatch, ...prev]);
   };
 
-  // ── Accept Challenge ──
   const handleAccept = async (match) => {
-    if (!currentUserId) {
-      alert("Please login to accept a challenge.");
-      return;
-    }
-
-    // Prevent creator from accepting their own challenge
-    if (match.created_by === currentUserId) {
-      alert("You cannot accept your own challenge.");
-      return;
-    }
-
-    // Check G-Points balance
+    if (!currentUserId) { alert("Please login to accept a challenge."); return; }
+    if (match.created_by === currentUserId) { alert("You cannot accept your own challenge."); return; }
     if (gPointsBalance !== null && gPointsBalance < match.entry_points) {
-      alert(`Insufficient G-Points. You need ${match.entry_points} G-PTS but have ${gPointsBalance}. Top up your wallet.`);
+      alert(`Insufficient G-Points. Need ${match.entry_points} G but have ${gPointsBalance}.`);
       return;
     }
 
     try {
       setAcceptingId(match.id);
 
-      // 1. Update match status to accepted + set accepted_by
+      // Update match status
       const { error: matchError } = await supabase
         .from("matches")
         .update({ status: "accepted", accepted_by: currentUserId })
         .eq("id", match.id)
-        .eq("status", "open"); // safety: only accept if still open
-
+        .eq("status", "open");
       if (matchError) throw matchError;
 
-      // 2. Add accepter to match_players
+      // Add to match_players
       const { error: playerError } = await supabase
         .from("match_players")
         .insert({ match_id: match.id, user_id: currentUserId, team: 2 });
+      if (playerError && !playerError.message.includes("unique")) throw playerError;
 
-      // Ignore duplicate error (in case already inserted)
-      if (playerError && !playerError.message.includes("unique")) {
-        throw playerError;
-      }
+      // Get the auto-created group (trigger fires on match update)
+      await new Promise(r => setTimeout(r, 800))
 
-      // 3 & 4. Create conversation + add both members via security definer function
-      const { data: convId, error: convError } = await supabase
-        .rpc("create_challenge_conversation", {
-          p_match_id: match.id,
-          p_challenger_id: match.created_by,
-          p_accepter_id: currentUserId,
-        });
+      const { data: group } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('match_id', match.id)
+        .single()
 
-      if (convError) {
-        console.error("Conv error:", JSON.stringify(convError));
-        throw convError;
-      }
-
-      // 5. Remove from local list + navigate to chat
       setChallenges((prev) => prev.filter((c) => c.id !== match.id));
-      navigate(`/chat/${convId}`);
+
+      if (group?.id) {
+        navigate(`/chat/group/${group.id}`)
+      } else {
+        navigate('/lobby-hub')
+      }
 
     } catch (err) {
       console.error("Accept error:", err.message);
-      alert("Failed to accept challenge: " + err.message);
+      alert("Failed to accept: " + err.message);
     } finally {
       setAcceptingId(null);
     }
@@ -269,6 +276,7 @@ function ChallengeMode() {
         gPointsBalance={gPointsBalance}
       />
 
+      {/* HEADER */}
       <header className="max-w-6xl mx-auto mb-12 relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-6 text-left w-full">
           <button onClick={() => navigate(-1)} className="p-3 bg-white/5 border border-white/10 rounded-2xl active:scale-90 transition-all text-white">
@@ -284,9 +292,8 @@ function ChallengeMode() {
         </div>
 
         <div className="flex items-center gap-4 shrink-0">
-          {/* G-Points balance HUD */}
           <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-5 py-3 rounded-2xl">
-            <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+            <Gamepad2 size={14} className="text-emerald-400" />
             <div>
               <p className="text-[8px] text-slate-500 tracking-widest leading-none mb-0.5">Balance</p>
               <p className="text-sm text-emerald-400 font-black leading-none">
@@ -294,7 +301,6 @@ function ChallengeMode() {
               </p>
             </div>
           </div>
-
           <button
             onClick={() => setIsModalOpen(true)}
             className="bg-emerald-500 text-black px-10 py-5 rounded-[2.5rem] text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center gap-3"
@@ -317,10 +323,7 @@ function ChallengeMode() {
             }`}
           >
             {slab === "All" ? "All Stakes" : (
-              <>
-                <Gamepad2 size={11} className={selectedSlab === slab ? "text-black" : "text-emerald-400"} />
-                {slab} G-PTS
-              </>
+              <><Gamepad2 size={11} className={selectedSlab === slab ? "text-black" : "text-emerald-400"} />{slab} G-PTS</>
             )}
           </button>
         ))}
@@ -335,14 +338,15 @@ function ChallengeMode() {
           </div>
         ) : filteredChallenges.length === 0 ? (
           <div className="col-span-full py-20 bg-white/5 rounded-[3rem] border border-dashed border-white/10 text-center">
-            <p className="text-slate-500 tracking-widest">No active challenges.</p>
+            <p className="text-slate-500 tracking-widest">No active challenges. Be the first!</p>
+            <button onClick={() => setIsModalOpen(true)} className="mt-4 bg-emerald-500 text-black px-8 py-3 rounded-2xl text-[10px] tracking-widest">
+              Create Challenge
+            </button>
           </div>
         ) : (
           <AnimatePresence mode="popLayout">
             {filteredChallenges.map((match) => {
               const { sport, mode } = parseMatchType(match.match_type);
-              const playerName = match.player?.name || "Unknown";
-              const arenaName  = match.arena?.name  || "TBD";
               const isOwnChallenge = match.created_by === currentUserId;
               const isAccepting = acceptingId === match.id;
               const canAfford = gPointsBalance === null || gPointsBalance >= match.entry_points;
@@ -368,13 +372,12 @@ function ChallengeMode() {
                           </span>
                         )}
                       </div>
-                      <h3 className="text-3xl mt-2 text-white">{playerName}</h3>
+                      <h3 className="text-3xl mt-2 text-white">{match.player?.name}</h3>
                       <p className="text-[10px] text-slate-500">{mode}</p>
                     </div>
-
                     <div className="text-right">
                       <div className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-100 px-4 py-2 rounded-xl text-sm shadow-xl">
-                        <Gamepad2 size={14} className="text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                        <Gamepad2 size={14} className="text-emerald-400" />
                         <span className="font-black">{match.entry_points}</span>
                       </div>
                       <p className="text-[9px] text-emerald-500 mt-2 flex items-center justify-end gap-1">
@@ -387,7 +390,7 @@ function ChallengeMode() {
                   <div className="grid grid-cols-2 gap-4 mb-8">
                     <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
                       <p className="text-[8px] text-slate-500 mb-1">Venue</p>
-                      <p className="text-[11px] truncate text-white">{arenaName}</p>
+                      <p className="text-[11px] truncate text-white">{match.arena?.name || 'TBD'}</p>
                     </div>
                     <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
                       <p className="text-[8px] text-slate-500 mb-1">Kickoff</p>
@@ -396,25 +399,16 @@ function ChallengeMode() {
                   </div>
 
                   {isOwnChallenge ? (
-                    // Creator sees a disabled "Waiting" button
-                    <button
-                      disabled
-                      className="w-full bg-white/5 border border-white/10 text-slate-500 py-5 rounded-2xl text-xs tracking-[0.2em] cursor-not-allowed flex items-center justify-center gap-2"
-                    >
+                    <button disabled className="w-full bg-white/5 border border-white/10 text-slate-500 py-5 rounded-2xl text-xs tracking-[0.2em] cursor-not-allowed flex items-center justify-center gap-2">
                       <Loader2 size={14} className="animate-spin" />
                       Waiting for Opponent...
                     </button>
                   ) : !canAfford ? (
-                    // Not enough G-Points
-                    <button
-                      disabled
-                      className="w-full bg-red-500/10 border border-red-500/20 text-red-400 py-5 rounded-2xl text-xs tracking-[0.2em] cursor-not-allowed flex items-center justify-center gap-2"
-                    >
+                    <button disabled className="w-full bg-red-500/10 border border-red-500/20 text-red-400 py-5 rounded-2xl text-xs tracking-[0.2em] cursor-not-allowed flex items-center justify-center gap-2">
                       <Gamepad2 size={14} />
                       Need {match.entry_points} G-PTS to Accept
                     </button>
                   ) : (
-                    // Others see the Accept button
                     <button
                       onClick={() => handleAccept(match)}
                       disabled={isAccepting}
