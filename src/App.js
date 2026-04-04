@@ -7,6 +7,7 @@ import ScrollToTop from "./components/ScrollToTop";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore"; 
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import About from "./pages/About";
 import Policies from "./pages/Policies";
 import Contact from "./pages/Contact";
@@ -62,7 +63,7 @@ function LayoutContent() {
     "/community", "/tournaments", "/contact", "/about", "/terms", "/privacy",
     "/owner-login", "/admin-login", "/my-bookings", "/venue-manager", "/policies",
     "/create-appeal", "/arena-legends", "/play-area", "/standard-profile",
-    "/inbox", "/chat"
+    "/inbox", "/chat", "/reset-password"
   ];
 
   const shouldHide = hideLayoutPaths.some(path => 
@@ -77,6 +78,7 @@ function LayoutContent() {
         <Route path="/" element={<Home />} />
         <Route path="/booking" element={<Explore />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/owner-login" element={<OwnerLogin />} />
         <Route path="/admin-login" element={<AdminLogin />} />
         <Route path="/about" element={<About />} />
