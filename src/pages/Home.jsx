@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { motion, useScroll, useTransform, useMotionValue, useSpring } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, Trophy, Zap, Users, MapPin, Star, Sparkles, Flame, Lightbulb, Loader } from "lucide-react";
+import { MessageSquare, Trophy, Zap, MapPin, Star, Sparkles, Flame, Lightbulb, Loader } from "lucide-react";
 import heroLogo from "../assets/hero-logo.png";
 import { supabase } from "../lib/supabase";
 
