@@ -288,11 +288,6 @@ function ArenaApprovalPanel() {
     setProcessing(null)
   }
 
-  // Admin direct edit court
-  const handleDirectEditCourt = async (court, arenaId) => {
-    setEditingArena({ court, arenaId })
-  }
-
   const handleSaveCourtEdit = async (courtId, name, price) => {
     await supabase.from('courts').update({ name, price_per_hour: price }).eq('id', courtId)
     setEditingArena(null)
