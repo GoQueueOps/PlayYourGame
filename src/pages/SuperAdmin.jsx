@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Layers, Activity, Plus, Trash2, LogOut,
   ShieldCheck, MapPin, XCircle,
@@ -6,26 +6,19 @@ import {
   AlertCircle, Ban, Unlock, Search, Eye,
   MessageCircle, Send, UserPlus, UserCheck,
   Star, Calendar, DollarSign, Loader2,
-  ToggleLeft, ToggleRight, Clock, CheckCircle2, Edit3
+  ToggleLeft, ToggleRight, Clock, CheckCircle2, Edit3, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 
 const SPORTS_LIST = ["Cricket", "Football", "Basketball", "Badminton", "Tennis", "Pickleball"];
+const ADMIN_CHAT_GROUP_ID = '00000000-0000-0000-0000-000000000001';
 
-function MiniBar({ value, max }) {
-  return (
-    <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-      <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min((value / max) * 100, 100)}%` }}
-        transition={{ duration: 0.8, ease: "easeOut" }} className="h-full bg-purple-500 rounded-full" />
-    </div>
-  );
-}
-
+// ─── STAT CARD ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, icon, color, change }) {
   const up = change >= 0;
   return (
-    <div className="bg-[#0b0f1a] p-6 rounded-2xl border border-white/[0.06] relative overflow-hidden group hover:border-purple-500/20 transition-all">
+    <div className="bg-[#0b0f1a] p-6 rounded-2xl border border-white/[0.06] group hover:border-purple-500/20 transition-all">
       <div className="flex justify-between items-start mb-3">
         <p className="text-[8px] font-bold uppercase tracking-[0.3em] text-slate-500">{label}</p>
         <span className={`${color} opacity-50 group-hover:opacity-100 transition-all`}>{icon}</span>
@@ -55,8 +48,8 @@ function FeaturedArenaManager() {
   const fetchAll = async () => {
     setLoading(true)
     const [f, a] = await Promise.all([
-      supabase.from('featured_arenas').select('*, arenas (id, name, city, location)').order('created_at', { ascending: false }),
-      supabase.from('arenas').select('id, name, city, location, state').eq('is_active', true)
+      supabase.from('featured_arenas').select('*, arenas(id,name,city,location)').order('created_at', { ascending: false }),
+      supabase.from('arenas').select('id,name,city,location,state').eq('is_active', true)
     ])
     if (f.data) setFeaturedList(f.data)
     if (a.data) setAllArenas(a.data)
@@ -99,34 +92,35 @@ function FeaturedArenaManager() {
       </div>
 
       {loading ? <div className="flex justify-center py-12"><Loader2 className="animate-spin text-orange-500" size={32} /></div>
-        : featuredList.length === 0 ? <div className="text-center py-20 opacity-40"><Star size={50} className="mx-auto mb-4 text-orange-400" /><p className="text-sm font-black uppercase">No Featured Arenas</p></div>
-        : <div className="space-y-3">{featuredList.map(f => {
-          const expired = isExpired(f.end_date)
-          return (
-            <motion.div key={f.id} layout className={`bg-[#0b0f1a] border rounded-2xl p-5 ${expired ? 'border-red-500/20 opacity-60' : f.is_active ? 'border-orange-500/20' : 'border-white/[0.06]'}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-black text-base">{f.arenas?.name}</h4>
-                    {expired && <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">EXPIRED</span>}
-                    {!expired && f.is_active && <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">LIVE</span>}
-                    {!expired && !f.is_active && <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">PAUSED</span>}
+        : featuredList.length === 0
+          ? <div className="text-center py-20 opacity-40"><Star size={50} className="mx-auto mb-4 text-orange-400" /><p className="text-sm font-black uppercase">No Featured Arenas</p></div>
+          : <div className="space-y-3">{featuredList.map(f => {
+            const expired = isExpired(f.end_date)
+            return (
+              <div key={f.id} className={`bg-[#0b0f1a] border rounded-2xl p-5 ${expired ? 'border-red-500/20 opacity-60' : f.is_active ? 'border-orange-500/20' : 'border-white/[0.06]'}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-black text-base">{f.arenas?.name}</h4>
+                      {expired && <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">EXPIRED</span>}
+                      {!expired && f.is_active && <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">LIVE</span>}
+                      {!expired && !f.is_active && <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">PAUSED</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-[9px] text-slate-500 font-bold uppercase mt-2">
+                      <span className="flex items-center gap-1"><MapPin size={10} /> {f.city || 'All'}{f.state ? `, ${f.state}` : ''}</span>
+                      <span className="flex items-center gap-1"><Calendar size={10} /> {fmtDate(f.start_date)} → {fmtDate(f.end_date)}</span>
+                      <span className="flex items-center gap-1"><Star size={10} className="text-orange-400" /> Priority {f.priority}</span>
+                      {f.payment_amount > 0 && <span className="flex items-center gap-1 text-emerald-400"><DollarSign size={10} /> ₹{f.payment_amount}</span>}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-4 text-[9px] text-slate-500 font-bold uppercase mt-2">
-                    <span className="flex items-center gap-1"><MapPin size={10} /> {f.city || 'All'}{f.state ? `, ${f.state}` : ''}</span>
-                    <span className="flex items-center gap-1"><Calendar size={10} /> {fmtDate(f.start_date)} → {fmtDate(f.end_date)}</span>
-                    <span className="flex items-center gap-1"><Star size={10} className="text-orange-400" /> Priority {f.priority}</span>
-                    {f.payment_amount > 0 && <span className="flex items-center gap-1 text-emerald-400"><DollarSign size={10} /> ₹{f.payment_amount}</span>}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!expired && <button onClick={() => toggleActive(f.id, f.is_active)} className={`p-2 rounded-xl transition-all ${f.is_active ? 'text-orange-400 bg-orange-500/10' : 'text-slate-400 bg-white/5'}`}>{f.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}</button>}
+                    <button onClick={() => handleDelete(f.id)} className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-xl"><Trash2 size={16} /></button>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {!expired && <button onClick={() => toggleActive(f.id, f.is_active)} className={`p-2 rounded-xl transition-all ${f.is_active ? 'text-orange-400 bg-orange-500/10' : 'text-slate-400 bg-white/5'}`}>{f.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}</button>}
-                  <button onClick={() => handleDelete(f.id)} className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-xl"><Trash2 size={16} /></button>
                 </div>
               </div>
-            </motion.div>
-          )
-        })}</div>
+            )
+          })}</div>
       }
 
       <AnimatePresence>
@@ -134,7 +128,7 @@ function FeaturedArenaManager() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setShowAddModal(false)}>
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()} className="bg-[#0d1424] border border-white/[0.1] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
-                <div><p className="text-[8px] font-bold uppercase tracking-[0.3em] text-orange-500">Feature an Arena</p><h3 className="text-lg font-black uppercase mt-1">Add Featured Listing</h3></div>
+                <h3 className="text-lg font-black uppercase">Add Featured Listing</h3>
                 <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-white"><XCircle size={20} /></button>
               </div>
               <div className="p-6 space-y-4">
@@ -170,9 +164,10 @@ function FeaturedArenaManager() {
   )
 }
 
-// ─── ARENA APPROVAL PANEL (same as admin) ────────────────────────────────────
+// ─── ARENA APPROVAL PANEL ─────────────────────────────────────────────────────
 function ArenaApprovalPanel() {
   const [requests, setRequests] = useState([])
+  const [reviewerNames, setReviewerNames] = useState({})
   const [loading, setLoading] = useState(true)
   const [actionNote, setActionNote] = useState({})
   const [processing, setProcessing] = useState(null)
@@ -182,8 +177,20 @@ function ArenaApprovalPanel() {
 
   const fetchRequests = async () => {
     setLoading(true)
-    const { data } = await supabase.from('arena_approval_requests').select('*, arenas(id, name, city)').order('created_at', { ascending: false })
-    if (data) setRequests(data)
+    const { data } = await supabase
+      .from('arena_approval_requests')
+      .select('*, arenas(id, name, city)')
+      .order('created_at', { ascending: false })
+    if (data) {
+      setRequests(data)
+      const reviewerIds = [...new Set(data.filter(r => r.reviewed_by).map(r => r.reviewed_by))]
+      if (reviewerIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', reviewerIds)
+        const map = {}
+        profiles?.forEach(p => { map[p.id] = p.name })
+        setReviewerNames(map)
+      }
+    }
     setLoading(false)
   }
 
@@ -192,7 +199,11 @@ function ArenaApprovalPanel() {
     try {
       const payload = req.payload || {}
       if (req.request_type === 'new_arena') {
-        const { data: newArena, error } = await supabase.from('arenas').insert({ name: payload.name, location: payload.address, city: payload.city || '', state: payload.state || '', phone: payload.phone, description: payload.description || '', venue_manager_id: req.requested_by, is_active: true }).select().single()
+        const { data: newArena, error } = await supabase.from('arenas').insert({
+          name: payload.name, location: payload.address, city: payload.city || '',
+          state: payload.state || '', phone: payload.phone, description: payload.description || '',
+          venue_manager_id: req.requested_by, is_active: true,
+        }).select().single()
         if (error) throw error
         for (const [sportName, courts] of Object.entries(payload.sports || {})) {
           const { data: sportRow } = await supabase.from('sports').select('id').eq('name', sportName).single()
@@ -203,145 +214,171 @@ function ArenaApprovalPanel() {
           }
         }
       } else if (req.request_type === 'edit_arena' && req.arena_id) {
-        await supabase.from('arenas').update({ name: payload.name, location: payload.address, city: payload.city || '', state: payload.state || '', phone: payload.phone, description: payload.description || '' }).eq('id', req.arena_id)
+        await supabase.from('arenas').update({
+          name: payload.name, location: payload.address, city: payload.city || '',
+          state: payload.state || '', phone: payload.phone, description: payload.description || '',
+        }).eq('id', req.arena_id)
         for (const [sportName, courts] of Object.entries(payload.sports || {})) {
           const { data: sportRow } = await supabase.from('sports').select('id').eq('name', sportName).single()
           if (!sportRow) continue
           for (const court of courts) {
-            if (court.dbId) { await supabase.from('courts').update({ name: court.name, price_per_hour: court.pricing?.[0]?.price || 0 }).eq('id', court.dbId) }
-            else { await supabase.from('courts').insert({ arena_id: req.arena_id, sport_id: sportRow.id, name: court.name, price_per_hour: court.pricing?.[0]?.price || 0, is_active: true }) }
+            if (court.dbId) {
+              await supabase.from('courts').update({ name: court.name, price_per_hour: court.pricing?.[0]?.price || 0 }).eq('id', court.dbId)
+            } else {
+              await supabase.from('courts').insert({ arena_id: req.arena_id, sport_id: sportRow.id, name: court.name, price_per_hour: court.pricing?.[0]?.price || 0, is_active: true })
+            }
           }
         }
       }
       const { data: { user } } = await supabase.auth.getUser()
-      await supabase.from('arena_approval_requests').update({ status: 'approved', admin_note: actionNote[req.id] || 'Approved', reviewed_by: user?.id, updated_at: new Date().toISOString() }).eq('id', req.id)
+      await supabase.from('arena_approval_requests').update({
+        status: 'approved', admin_note: actionNote[req.id] || 'Approved',
+        reviewed_by: user?.id, updated_at: new Date().toISOString(),
+      }).eq('id', req.id)
       await supabase.from('notifications').insert({ user_id: req.requested_by, type: 'approval', message: `Your ${req.request_type?.replace(/_/g, ' ')} request has been approved! ✅` })
       await fetchRequests()
-    } catch (err) { alert('Error: ' + err.message) }
+    } catch (err) { alert('Error approving: ' + err.message) }
     setProcessing(null)
   }
 
   const handleReject = async (req) => {
     setProcessing(req.id)
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('arena_approval_requests').update({ status: 'rejected', admin_note: actionNote[req.id] || 'Rejected', reviewed_by: user?.id, updated_at: new Date().toISOString() }).eq('id', req.id)
-    await supabase.from('notifications').insert({ user_id: req.requested_by, type: 'approval', message: `Your ${req.request_type?.replace(/_/g, ' ')} request was rejected. ${actionNote[req.id] ? 'Note: ' + actionNote[req.id] : ''}` })
+    await supabase.from('arena_approval_requests').update({
+      status: 'rejected', admin_note: actionNote[req.id] || 'Rejected by admin',
+      reviewed_by: user?.id, updated_at: new Date().toISOString(),
+    }).eq('id', req.id)
+    await supabase.from('notifications').insert({ user_id: req.requested_by, type: 'approval', message: `Your ${req.request_type?.replace(/_/g, ' ')} request was rejected.${actionNote[req.id] ? ' Note: ' + actionNote[req.id] : ''}` })
     await fetchRequests()
     setProcessing(null)
   }
 
-  const pending = requests.filter(r => r.status === 'pending')
-  const reviewed = requests.filter(r => r.status !== 'pending')
-  const REQ_TYPE_LABEL = { new_arena: 'New Arena', edit_arena: 'Arena Edit', add_court: 'Add Court', edit_court: 'Edit Court' }
+  const REQ_LABEL = { new_arena: 'New Arena', edit_arena: 'Arena Edit', add_court: 'Add Court', edit_court: 'Edit Court' }
 
   return (
     <div className="space-y-6">
       <div className="bg-[#0b0f1a] border border-white/[0.06] p-5 rounded-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-yellow-500/10 rounded-xl flex items-center justify-center text-yellow-500 border border-yellow-500/20"><Clock size={20} /></div>
-          <div><h3 className="font-black uppercase text-base">Arena Approval Requests</h3><p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">{pending.length} pending · {reviewed.length} reviewed</p></div>
+          <div><h3 className="font-black uppercase text-base">Arena Approval Requests</h3><p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">{requests.filter(r => r.status === 'pending').length} pending</p></div>
         </div>
+        <button onClick={fetchRequests} className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white"><RefreshCw size={16} /></button>
       </div>
 
       {loading ? <div className="flex justify-center py-12"><Loader2 className="animate-spin text-yellow-500" size={32} /></div>
-        : requests.length === 0 ? <div className="text-center py-20 opacity-40"><CheckCircle2 size={48} className="mx-auto mb-4 text-emerald-400" /><p className="font-black uppercase">No Pending Requests</p></div>
-        : <div className="space-y-4">
-          {[...pending, ...reviewed].map(req => (
-            <motion.div key={req.id} layout className={`bg-[#0b0f1a] border rounded-2xl overflow-hidden ${req.status === 'pending' ? 'border-yellow-500/20' : req.status === 'approved' ? 'border-emerald-500/20' : 'border-red-500/20'}`}>
-              <div className="p-5 flex items-start justify-between gap-4 cursor-pointer" onClick={() => setExpanded(expanded === req.id ? null : req.id)}>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-black text-sm">{REQ_TYPE_LABEL[req.request_type] || req.request_type}</h4>
-                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : req.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>{req.status.toUpperCase()}</span>
+        : requests.length === 0
+          ? <div className="text-center py-20 opacity-40"><CheckCircle2 size={48} className="mx-auto mb-4 text-emerald-400" /><p className="font-black uppercase">No Requests</p></div>
+          : <div className="space-y-3">
+            {requests.map(req => (
+              <div key={req.id} className={`bg-[#0b0f1a] border rounded-2xl overflow-hidden ${req.status === 'pending' ? 'border-yellow-500/20' : req.status === 'approved' ? 'border-emerald-500/20' : 'border-red-500/20'}`}>
+                <div className="p-5 flex items-start justify-between gap-4 cursor-pointer" onClick={() => setExpanded(expanded === req.id ? null : req.id)}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-black text-sm">{REQ_LABEL[req.request_type] || req.request_type}</h4>
+                      <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : req.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>{req.status.toUpperCase()}</span>
+                    </div>
+                    <p className="text-[9px] text-slate-500">Arena: {req.arenas?.name || req.payload?.name || '—'} · {new Date(req.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</p>
+                    {req.reviewed_by && (
+                      <p className={`text-[9px] mt-1 font-bold ${req.status === 'approved' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {req.status === 'approved' ? '✓ Approved' : '✗ Rejected'} by {reviewerNames[req.reviewed_by] || 'Admin'}
+                      </p>
+                    )}
+                    {req.admin_note && <p className="text-[9px] text-slate-400 mt-0.5">Note: {req.admin_note}</p>}
                   </div>
-                  <p className="text-[9px] text-slate-500">Arena: {req.arenas?.name || req.payload?.name || '—'} · {new Date(req.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</p>
-                  {req.admin_note && <p className="text-[9px] text-slate-400 mt-1">Note: {req.admin_note}</p>}
+                  <span className="text-slate-500 text-[10px]">{expanded === req.id ? '▲' : '▼'}</span>
                 </div>
-                <span className="text-slate-500 text-[10px]">{expanded === req.id ? '▲' : '▼'}</span>
-              </div>
-              <AnimatePresence>
-                {expanded === req.id && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-t border-white/5 p-5 space-y-4">
-                    {req.payload && (
-                      <div className="bg-black/30 rounded-xl p-4 space-y-2">
-                        <p className="text-[9px] font-black text-slate-400 uppercase">Request Details</p>
-                        {req.payload.name && <p className="text-[10px]"><span className="text-slate-500">Name:</span> {req.payload.name}</p>}
-                        {req.payload.address && <p className="text-[10px]"><span className="text-slate-500">Address:</span> {req.payload.address}</p>}
-                        {req.payload.city && <p className="text-[10px]"><span className="text-slate-500">City:</span> {req.payload.city}</p>}
-                        {req.payload.phone && <p className="text-[10px]"><span className="text-slate-500">Phone:</span> {req.payload.phone}</p>}
-                        {req.payload.sports && Object.entries(req.payload.sports).map(([sport, courts]) => (
-                          <div key={sport} className="mt-2">
-                            <p className="text-[9px] text-emerald-400 font-black uppercase">{sport}</p>
-                            {courts.map((c, i) => <p key={i} className="text-[9px] text-slate-400 pl-3">• {c.name} — ₹{c.pricing?.[0]?.price}/hr</p>)}
+                <AnimatePresence>
+                  {expanded === req.id && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-t border-white/5 p-5 space-y-4">
+                      {req.payload && (
+                        <div className="bg-black/30 rounded-xl p-4 space-y-2">
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Request Details</p>
+                          {req.payload.name && <p className="text-[10px]"><span className="text-slate-500">Name:</span> {req.payload.name}</p>}
+                          {req.payload.address && <p className="text-[10px]"><span className="text-slate-500">Address:</span> {req.payload.address}</p>}
+                          {req.payload.city && <p className="text-[10px]"><span className="text-slate-500">City:</span> {req.payload.city}{req.payload.state ? `, ${req.payload.state}` : ''}</p>}
+                          {req.payload.phone && <p className="text-[10px]"><span className="text-slate-500">Phone:</span> {req.payload.phone}</p>}
+                          {req.payload.sports && Object.entries(req.payload.sports).map(([sport, courts]) => (
+                            <div key={sport} className="mt-2">
+                              <p className="text-[9px] text-emerald-400 font-black uppercase">{sport}</p>
+                              {courts.map((c, i) => <p key={i} className="text-[9px] text-slate-400 pl-3">• {c.name} — ₹{c.pricing?.[0]?.price}/hr</p>)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {req.status === 'pending' && (
+                        <>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase block mb-2">Note for Owner</label>
+                            <input type="text" placeholder="Optional note..." value={actionNote[req.id] || ''} onChange={e => setActionNote(prev => ({ ...prev, [req.id]: e.target.value }))} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-[10px] font-bold outline-none text-white" />
                           </div>
-                        ))}
-                      </div>
-                    )}
-                    {req.status === 'pending' && (
-                      <div>
-                        <label className="text-[9px] font-black text-slate-500 uppercase block mb-2">Admin Note (optional)</label>
-                        <input type="text" placeholder="Note for owner..." value={actionNote[req.id] || ''} onChange={e => setActionNote(prev => ({ ...prev, [req.id]: e.target.value }))} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-[10px] font-bold outline-none text-white" />
-                      </div>
-                    )}
-                    {req.status === 'pending' && (
-                      <div className="flex gap-3">
-                        <motion.button whileTap={{ scale: 0.96 }} onClick={() => handleApprove(req)} disabled={processing === req.id} className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2">
-                          {processing === req.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Approve & Apply
-                        </motion.button>
-                        <motion.button whileTap={{ scale: 0.96 }} onClick={() => handleReject(req)} disabled={processing === req.id} className="flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Reject</motion.button>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </div>
+                          <div className="flex gap-3">
+                            <motion.button whileTap={{ scale: 0.96 }} onClick={() => handleApprove(req)} disabled={processing === req.id} className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2">
+                              {processing === req.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Approve & Apply
+                            </motion.button>
+                            <motion.button whileTap={{ scale: 0.96 }} onClick={() => handleReject(req)} disabled={processing === req.id} className="flex-1 bg-red-500/10 border border-red-500/20 text-red-400 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Reject</motion.button>
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
       }
-
-      {/* DIRECT COURT MANAGEMENT */}
-      <div className="bg-[#0b0f1a] border border-white/[0.06] p-5 rounded-2xl">
-        <h3 className="font-black uppercase text-sm mb-4">Direct Court Management</h3>
-        <AdminArenaEditor />
-      </div>
     </div>
   )
 }
 
-function AdminArenaEditor() {
+// ─── ARENA CONTROL ─────────────────────────────────────────────────────────────
+function ArenaControlPanel({ accentColor = 'purple' }) {
   const [arenas, setArenas] = useState([])
   const [selectedArena, setSelectedArena] = useState(null)
   const [courts, setCourts] = useState([])
-  const [showAddCourt, setShowAddCourt] = useState(false)
-  const [newCourt, setNewCourt] = useState({ sport: 'Cricket', name: '', price: 500 })
+  const [loading, setLoading] = useState(true)
   const [editingCourt, setEditingCourt] = useState(null)
+  const [showAddCourt, setShowAddCourt] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [newCourt, setNewCourt] = useState({ sport: 'Cricket', name: '', price: 500 })
 
-  useEffect(() => {
-    supabase.from('arenas').select('id, name, city').eq('is_active', true).then(({ data }) => { if (data) setArenas(data) })
-  }, [])
+  const accent = accentColor === 'purple'
+    ? { ring: 'border-purple-500/50 bg-purple-500/10', btn: 'bg-purple-500 text-white', addPanel: 'border-purple-500/20 bg-purple-500/5', text: 'text-purple-400' }
+    : { ring: 'border-emerald-500/50 bg-emerald-500/10', btn: 'bg-emerald-500 text-black', addPanel: 'border-emerald-500/20 bg-emerald-500/5', text: 'text-emerald-400' }
+
+  useEffect(() => { fetchArenas() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchArenas = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('arenas').select('id, name, location, city, is_active').order('name')
+    if (data) setArenas(data)
+    setLoading(false)
+  }
 
   const loadCourts = async (arenaId) => {
-    const { data } = await supabase.from('courts').select('id, name, price_per_hour, is_active, sports(name, emoji)').eq('arena_id', arenaId)
+    const { data } = await supabase.from('courts').select('id, name, price_per_hour, is_active, sports(name, emoji)').eq('arena_id', arenaId).order('name')
     if (data) setCourts(data)
   }
 
-  const handleSelectArena = async (arena) => { setSelectedArena(arena); await loadCourts(arena.id) }
-
-  const handleSaveEdit = async (courtId, name, price) => {
-    await supabase.from('courts').update({ name, price_per_hour: price }).eq('id', courtId)
+  const selectArena = async (arena) => {
+    setSelectedArena(arena)
     setEditingCourt(null)
-    await loadCourts(selectedArena.id)
+    setShowAddCourt(false)
+    await loadCourts(arena.id)
   }
 
-  const handleAdd = async () => {
-    if (!newCourt.name) { alert('Enter court name'); return }
+  const toggleArenaActive = async (arenaId, cur) => {
+    await supabase.from('arenas').update({ is_active: !cur }).eq('id', arenaId)
+    setArenas(prev => prev.map(a => a.id === arenaId ? { ...a, is_active: !cur } : a))
+    if (selectedArena?.id === arenaId) setSelectedArena(prev => ({ ...prev, is_active: !cur }))
+  }
+
+  const saveCourtEdit = async () => {
+    if (!editingCourt) return
     setSaving(true)
-    const { data: sportRow } = await supabase.from('sports').select('id').eq('name', newCourt.sport).single()
-    if (sportRow) await supabase.from('courts').insert({ arena_id: selectedArena.id, sport_id: sportRow.id, name: newCourt.name, price_per_hour: newCourt.price, is_active: true })
+    const { error } = await supabase.from('courts').update({ name: editingCourt.name, price_per_hour: editingCourt.price }).eq('id', editingCourt.id)
+    if (error) { alert('Error: ' + error.message); setSaving(false); return }
+    setEditingCourt(null)
     await loadCourts(selectedArena.id)
-    setNewCourt({ sport: 'Cricket', name: '', price: 500 })
-    setShowAddCourt(false)
     setSaving(false)
   }
 
@@ -350,64 +387,276 @@ function AdminArenaEditor() {
     await loadCourts(selectedArena.id)
   }
 
+  const addCourt = async () => {
+    if (!newCourt.name.trim()) { alert('Enter court name'); return }
+    setSaving(true)
+    const { data: sportRow } = await supabase.from('sports').select('id').eq('name', newCourt.sport).single()
+    if (!sportRow) { alert(`Sport "${newCourt.sport}" not found in DB. Add it first.`); setSaving(false); return }
+    const { error } = await supabase.from('courts').insert({ arena_id: selectedArena.id, sport_id: sportRow.id, name: newCourt.name, price_per_hour: newCourt.price, is_active: true })
+    if (error) { alert('Error: ' + error.message); setSaving(false); return }
+    setNewCourt({ sport: 'Cricket', name: '', price: 500 })
+    setShowAddCourt(false)
+    await loadCourts(selectedArena.id)
+    setSaving(false)
+  }
+
   return (
-    <div className="space-y-4">
-      <select onChange={e => handleSelectArena(arenas.find(a => a.id === e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-[10px] font-bold outline-none text-white">
-        <option value="">Select an arena...</option>
-        {arenas.map(a => <option key={a.id} value={a.id}>{a.name} — {a.city}</option>)}
-      </select>
+    <div className="space-y-6">
+      <div className="bg-[#0b0f1a] border border-white/[0.06] p-5 rounded-2xl flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${accentColor === 'purple' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}><Layers size={20} /></div>
+          <div><h3 className="font-black uppercase text-base">Arena Control</h3><p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Directly edit arenas and courts</p></div>
+        </div>
+        <button onClick={fetchArenas} className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white"><RefreshCw size={16} /></button>
+      </div>
 
-      {selectedArena && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[9px] font-black text-slate-400 uppercase">{courts.length} Courts</p>
-            <button onClick={() => setShowAddCourt(true)} className="flex items-center gap-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1.5 rounded-lg text-[9px] font-black"><Plus size={12} /> Add Court</button>
-          </div>
-
-          {courts.map(court => (
-            <div key={court.id} className="flex items-center justify-between bg-black/30 px-4 py-3 rounded-xl border border-white/5">
-              {editingCourt?.id === court.id ? (
-                <div className="flex items-center gap-2 flex-1">
-                  <input value={editingCourt.name} onChange={e => setEditingCourt({ ...editingCourt, name: e.target.value })} className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-bold text-white outline-none w-32" />
-                  <input type="number" value={editingCourt.price} onChange={e => setEditingCourt({ ...editingCourt, price: parseInt(e.target.value) })} className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-bold text-white outline-none w-20" />
-                  <button onClick={() => handleSaveEdit(court.id, editingCourt.name, editingCourt.price)} className="bg-purple-500 text-white px-3 py-1.5 rounded-lg text-[9px] font-black">Save</button>
-                  <button onClick={() => setEditingCourt(null)} className="text-slate-500 text-[9px] font-black">Cancel</button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ARENA LIST */}
+        <div className="space-y-2">
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Select Arena</p>
+          {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-slate-500" size={24} /></div>
+            : arenas.length === 0 ? <p className="text-[10px] text-slate-600">No arenas found</p>
+            : arenas.map(arena => (
+              <div key={arena.id} onClick={() => selectArena(arena)}
+                className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${selectedArena?.id === arena.id ? accent.ring : 'border-white/[0.06] bg-[#0b0f1a] hover:border-white/20'}`}>
+                <div>
+                  <p className="text-[10px] font-black">{arena.name}</p>
+                  <p className="text-[9px] text-slate-500">{arena.city}</p>
                 </div>
-              ) : (
-                <>
-                  <div><p className="text-[10px] font-black">{court.name}</p><p className="text-[9px] text-slate-500">{court.sports?.emoji} {court.sports?.name} · ₹{court.price_per_hour}/hr</p></div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => toggleCourtActive(court.id, court.is_active)} className={`text-[8px] font-black px-2 py-1 rounded-full ${court.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{court.is_active ? 'Active' : 'Inactive'}</button>
-                    <button onClick={() => setEditingCourt({ id: court.id, name: court.name, price: court.price_per_hour })} className="p-1.5 bg-white/5 rounded-lg text-slate-400 hover:text-white"><Edit3 size={14} /></button>
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
+                <div className="flex items-center gap-2">
+                  <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${arena.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{arena.is_active ? 'Live' : 'Off'}</span>
+                  <button onClick={e => { e.stopPropagation(); toggleArenaActive(arena.id, arena.is_active) }} className="p-1.5 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-all">
+                    {arena.is_active ? <ToggleRight size={16} className="text-emerald-400" /> : <ToggleLeft size={16} />}
+                  </button>
+                </div>
+              </div>
+            ))}
+        </div>
 
-          {showAddCourt && (
-            <div className="bg-black/30 rounded-xl p-4 border border-purple-500/20 space-y-3">
-              <p className="text-[9px] font-black text-purple-400 uppercase">Add New Court</p>
-              <div className="grid grid-cols-3 gap-2">
-                <select value={newCourt.sport} onChange={e => setNewCourt({ ...newCourt, sport: e.target.value })} className="bg-black/40 border border-white/10 rounded-lg p-2 text-[10px] font-bold text-white outline-none">
-                  {SPORTS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <input type="text" placeholder="Court name" value={newCourt.name} onChange={e => setNewCourt({ ...newCourt, name: e.target.value })} className="bg-black/40 border border-white/10 rounded-lg p-2 text-[10px] font-bold text-white outline-none" />
-                <input type="number" placeholder="₹/hr" value={newCourt.price} onChange={e => setNewCourt({ ...newCourt, price: parseInt(e.target.value) })} className="bg-black/40 border border-white/10 rounded-lg p-2 text-[10px] font-bold text-white outline-none" />
+        {/* COURTS */}
+        <div className="lg:col-span-2">
+          {!selectedArena ? (
+            <div className="flex items-center justify-center h-48 opacity-40">
+              <div className="text-center"><Layers size={32} className="mx-auto mb-3" /><p className="text-[10px] font-black uppercase">Select an arena to manage courts</p></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-black text-base">{selectedArena.name}</p>
+                  <p className="text-[9px] text-slate-500">{courts.length} courts</p>
+                </div>
+                <button onClick={() => { setShowAddCourt(true); setEditingCourt(null) }} className={`flex items-center gap-2 ${accent.btn} px-4 py-2.5 rounded-xl font-black text-[10px] uppercase`}>
+                  <Plus size={14} /> Add Court
+                </button>
               </div>
-              <div className="flex gap-2">
-                <button onClick={handleAdd} disabled={saving} className="flex-1 bg-purple-500 text-white py-2 rounded-lg font-black text-[10px] uppercase disabled:opacity-50 flex items-center justify-center gap-1">{saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add Court</button>
-                <button onClick={() => setShowAddCourt(false)} className="px-4 py-2 text-slate-500 text-[10px] font-black">Cancel</button>
-              </div>
+
+              {/* ADD COURT FORM */}
+              <AnimatePresence>
+                {showAddCourt && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                    className={`border rounded-2xl p-5 space-y-4 ${accent.addPanel}`}>
+                    <p className={`text-[9px] font-black uppercase ${accent.text}`}>New Court</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Sport</label>
+                        <select value={newCourt.sport} onChange={e => setNewCourt({ ...newCourt, sport: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-[10px] font-bold text-white outline-none">
+                          {SPORTS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Court Name</label>
+                        <input type="text" placeholder="e.g. Pitch 1" value={newCourt.name} onChange={e => setNewCourt({ ...newCourt, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && addCourt()} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-[10px] font-bold text-white outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">₹/hr</label>
+                        <input type="number" value={newCourt.price} onChange={e => setNewCourt({ ...newCourt, price: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-[10px] font-bold text-white outline-none" />
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <button onClick={addCourt} disabled={saving} className={`flex-1 ${accent.btn} py-2.5 rounded-xl font-black uppercase text-[10px] disabled:opacity-50 flex items-center justify-center gap-2`}>
+                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add Court
+                      </button>
+                      <button onClick={() => setShowAddCourt(false)} className="px-5 py-2.5 text-slate-500 font-black text-[10px]">Cancel</button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* COURTS LIST */}
+              {courts.length === 0 ? (
+                <div className="text-center py-12 opacity-40 border border-dashed border-white/10 rounded-2xl">
+                  <p className="text-[10px] font-black uppercase">No courts yet — add one above</p>
+                </div>
+              ) : courts.map(court => (
+                <div key={court.id} className="bg-[#0b0f1a] border border-white/[0.06] rounded-xl p-4 transition-all hover:border-white/20">
+                  {editingCourt?.id === court.id ? (
+                    <div className="space-y-3">
+                      <p className="text-[9px] font-black text-slate-400 uppercase">Editing: {court.name}</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Name</label>
+                          <input value={editingCourt.name} onChange={e => setEditingCourt({ ...editingCourt, name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold text-white outline-none focus:border-emerald-500/50" />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">₹/hr</label>
+                          <input type="number" value={editingCourt.price} onChange={e => setEditingCourt({ ...editingCourt, price: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold text-white outline-none focus:border-emerald-500/50" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={saveCourtEdit} disabled={saving} className={`flex-1 ${accent.btn} py-2 rounded-lg font-black text-[9px] uppercase disabled:opacity-50 flex items-center justify-center gap-1`}>
+                          {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Save Changes
+                        </button>
+                        <button onClick={() => setEditingCourt(null)} className="px-4 py-2 text-slate-500 font-black text-[9px]">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px] font-black">{court.name}</p>
+                        <p className="text-[9px] text-slate-500 mt-0.5">{court.sports?.emoji} {court.sports?.name} · ₹{court.price_per_hour}/hr</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => toggleCourtActive(court.id, court.is_active)} className={`text-[8px] font-black px-2.5 py-1 rounded-full transition-all ${court.is_active ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'}`}>
+                          {court.is_active ? 'Active' : 'Off'}
+                        </button>
+                        <button onClick={() => { setEditingCourt({ id: court.id, name: court.name, price: court.price_per_hour }); setShowAddCourt(false) }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-all">
+                          <Edit3 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
 
-// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
+// ─── ADMIN CHAT ───────────────────────────────────────────────────────────────
+function AdminChat({ accentColor = 'purple' }) {
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [memberNames, setMemberNames] = useState({})
+  const bottomRef = useRef(null)
+
+  useEffect(() => {
+    let channel
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUser(user)
+      await fetchMessages()
+
+      channel = supabase.channel(`admin_chat_${accentColor}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'group_messages',
+          filter: `group_id=eq.${ADMIN_CHAT_GROUP_ID}`
+        }, async (payload) => {
+          setMessages(prev => prev.find(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
+          setMemberNames(prev => {
+            if (prev[payload.new.sender_id]) return prev
+            supabase.from('profiles').select('id, name').eq('id', payload.new.sender_id).single().then(({ data }) => {
+              if (data) setMemberNames(p => ({ ...p, [data.id]: data.name }))
+            })
+            return prev
+          })
+        })
+        .subscribe()
+    }
+    init()
+    return () => { if (channel) supabase.removeChannel(channel) }
+  }, [accentColor]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  const fetchMessages = async () => {
+    setLoading(true)
+    const { data: msgs } = await supabase
+      .from('group_messages')
+      .select('id, sender_id, message, created_at')
+      .eq('group_id', ADMIN_CHAT_GROUP_ID)
+      .order('created_at', { ascending: true })
+      .limit(100)
+    if (msgs) {
+      setMessages(msgs)
+      const ids = [...new Set(msgs.map(m => m.sender_id))]
+      if (ids.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', ids)
+        const map = {}
+        profiles?.forEach(p => { map[p.id] = p.name })
+        setMemberNames(map)
+      }
+    }
+    setLoading(false)
+  }
+
+  const sendMessage = async () => {
+    const text = input.trim()
+    if (!text || !currentUser || sending) return
+    setSending(true)
+    setInput('')
+    const { error } = await supabase.from('group_messages').insert({
+      group_id: ADMIN_CHAT_GROUP_ID,
+      sender_id: currentUser.id,
+      message: text,
+    })
+    if (error) { alert('Chat error: ' + error.message); setInput(text) }
+    setSending(false)
+  }
+
+  const isMine = (msg) => msg.sender_id === currentUser?.id
+  const fmtTime = (d) => new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+  const myBg = accentColor === 'purple' ? 'bg-purple-500 text-white' : 'bg-emerald-500 text-black'
+  const theirBg = accentColor === 'purple' ? 'bg-purple-500/10 border border-purple-500/20 text-slate-200' : 'bg-emerald-500/10 border border-emerald-500/20 text-slate-200'
+  const focusBorder = accentColor === 'purple' ? 'focus:border-purple-500/50' : 'focus:border-emerald-500/50'
+  const sendBtnBg = accentColor === 'purple' ? 'bg-purple-500 text-white' : 'bg-emerald-500 text-black'
+
+  return (
+    <div className="space-y-5">
+      <h3 className="text-xl font-black uppercase">Admin Chat Room</h3>
+      <div className="bg-[#0b0f1a] border border-white/[0.06] rounded-2xl overflow-hidden flex flex-col h-[600px]">
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {loading ? (
+            <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-slate-500" size={28} /></div>
+          ) : messages.length === 0 ? (
+            <div className="flex items-center justify-center h-full opacity-40">
+              <div className="text-center"><MessageCircle size={32} className="mx-auto mb-3" /><p className="text-[10px] font-black uppercase">No messages yet — say hello!</p></div>
+            </div>
+          ) : messages.map(msg => (
+            <div key={msg.id} className={`flex ${isMine(msg) ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-xs flex flex-col gap-1 ${isMine(msg) ? 'items-end' : 'items-start'}`}>
+                {!isMine(msg) && <span className="text-[9px] text-slate-500 font-black px-2 uppercase">{memberNames[msg.sender_id] || 'Admin'}</span>}
+                <div className={`px-4 py-2.5 rounded-2xl text-[10px] leading-relaxed ${isMine(msg) ? `${myBg} rounded-br-sm` : `${theirBg} rounded-bl-sm`}`}>
+                  {msg.message}
+                </div>
+                <span className="text-[8px] text-slate-600 px-2">{fmtTime(msg.created_at)}</span>
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+        <div className="border-t border-white/[0.06] p-4 flex gap-2 bg-black/40">
+          <input type="text" placeholder="Type message..." value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+            className={`flex-1 bg-black/40 border border-white/[0.07] rounded-lg px-4 py-2.5 text-[10px] font-bold outline-none ${focusBorder} text-white placeholder-slate-600`} />
+          <motion.button whileTap={{ scale: 0.92 }} onClick={sendMessage} disabled={!input.trim() || sending}
+            className={`${sendBtnBg} px-6 py-2.5 rounded-lg font-black flex items-center gap-2 disabled:opacity-40`}>
+            {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          </motion.button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── MAIN SUPERADMIN COMPONENT ────────────────────────────────────────────────
 const SuperAdmin = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [arenas, setArenas] = useState([]);
@@ -417,11 +666,10 @@ const SuperAdmin = () => {
   const [pendingRequests, setPendingRequests] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
   const [newAdmin, setNewAdmin] = useState({ email: "", role: "admin" });
   const [stats, setStats] = useState({ bookings: 0, arenas: 0, players: 0, groups: 0 });
   const [addingAdmin, setAddingAdmin] = useState(false);
+  const [roleMsg, setRoleMsg] = useState(null);
 
   const unread = notifications.filter(n => !n.is_read).length;
 
@@ -431,11 +679,11 @@ const SuperAdmin = () => {
     try {
       const [arenasRes, playersRes, groupsRes, notifRes, bookingsRes, adminsRes, reqRes] = await Promise.all([
         supabase.from('arenas').select('id, name, location, city, is_active').limit(50),
-        supabase.from('profiles').select('id, name, email, created_at').limit(100),
+        supabase.from('profiles').select('id, name, email, created_at').order('created_at', { ascending: false }).limit(200),
         supabase.from('groups').select('id', { count: 'exact', head: true }),
         supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(20),
         supabase.from('bookings').select('id', { count: 'exact', head: true }),
-        supabase.from('user_roles').select('user_id, roles(name), profiles(name, email)'),
+        supabase.from('user_roles').select('user_id, roles(name), profiles(id, name, email)'),
         supabase.from('arena_approval_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       ])
       if (arenasRes.data) setArenas(arenasRes.data)
@@ -450,23 +698,29 @@ const SuperAdmin = () => {
   const handleAddAdmin = async () => {
     if (!newAdmin.email) { alert('Enter an email'); return }
     setAddingAdmin(true)
+    setRoleMsg(null)
     try {
-      const { data: profile } = await supabase.from('profiles').select('id').eq('email', newAdmin.email.toLowerCase().trim()).single()
-      if (!profile) throw new Error('User not found.')
-      const { data: roleRow } = await supabase.from('roles').select('id').eq('name', newAdmin.role).single()
-      if (!roleRow) throw new Error('Role not found')
-      await supabase.from('user_roles').update({ role_id: roleRow.id }).eq('user_id', profile.id)
+      const { data: profile, error: pErr } = await supabase.from('profiles').select('id, name').eq('email', newAdmin.email.toLowerCase().trim()).single()
+      if (pErr || !profile) throw new Error('User not found. Make sure they have an account first.')
+      const { data: roleRow, error: rErr } = await supabase.from('roles').select('id').eq('name', newAdmin.role).single()
+      if (rErr || !roleRow) throw new Error(`Role "${newAdmin.role}" not found in DB.`)
+      const { error: uErr } = await supabase.from('user_roles').update({ role_id: roleRow.id }).eq('user_id', profile.id)
+      if (uErr) throw new Error('Failed to update role: ' + uErr.message)
       setNewAdmin({ email: "", role: "admin" })
+      setRoleMsg({ type: 'success', text: `✅ ${profile.name || newAdmin.email} is now ${newAdmin.role}` })
+      // Re-fetch admins list immediately
       await fetchAll()
-      alert(`✅ ${newAdmin.email} is now ${newAdmin.role}`)
-    } catch (err) { alert('Error: ' + err.message) }
+    } catch (err) {
+      setRoleMsg({ type: 'error', text: '❌ ' + err.message })
+    }
     setAddingAdmin(false)
   }
 
-  const removeAdmin = async (userId) => {
-    if (!window.confirm('Downgrade to regular user?')) return
+  const removeAdmin = async (userId, userName) => {
+    if (!window.confirm(`Downgrade ${userName || 'this user'} to regular user?`)) return
     const { data: userRole } = await supabase.from('roles').select('id').eq('name', 'user').single()
-    await supabase.from('user_roles').update({ role_id: userRole?.id }).eq('user_id', userId)
+    if (!userRole) { alert('User role not found in DB'); return }
+    await supabase.from('user_roles').update({ role_id: userRole.id }).eq('user_id', userId)
     await fetchAll()
   }
 
@@ -484,11 +738,11 @@ const SuperAdmin = () => {
     { id: "dashboard", label: "Analytics", icon: <BarChart2 size={15} /> },
     { id: "featured", label: "Featured", icon: <Star size={15} /> },
     { id: "approvals", label: "Approvals", icon: <Clock size={15} />, badge: pendingRequests },
-    { id: "arenas", label: "Arena Control", icon: <Layers size={15} />, badge: arenas.length },
+    { id: "arenas", label: "Arena Control", icon: <Layers size={15} /> },
     { id: "admin_mgmt", label: "Admin Mgmt", icon: <UserPlus size={15} />, badge: admins.length },
-    { id: "reports", label: "Player Reports", icon: <AlertCircle size={15} /> },
+    { id: "reports", label: "Reports", icon: <AlertCircle size={15} /> },
     { id: "banned", label: "Banned", icon: <Ban size={15} /> },
-    { id: "players", label: "All Players", icon: <Users size={15} /> },
+    { id: "players", label: "All Players", icon: <Users size={15} />, badge: allPlayers.length },
     { id: "chat", label: "Admin Chat", icon: <MessageCircle size={15} /> },
   ];
 
@@ -500,6 +754,7 @@ const SuperAdmin = () => {
         <motion.div animate={{ x: [0, -50, 30, 0], y: [0, 40, -30, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 2 }} className="absolute -bottom-96 -right-96 w-96 h-96 bg-orange-500/10 blur-[150px] rounded-full" />
       </div>
 
+      {/* SIDEBAR */}
       <aside className="w-72 bg-[#080d18] hidden lg:flex flex-col border-r border-white/[0.05] sticky top-0 h-screen shrink-0 z-40">
         <div className="p-6 border-b border-white/[0.05]">
           <div className="flex items-center gap-3">
@@ -507,7 +762,7 @@ const SuperAdmin = () => {
             <div><h1 className="text-sm font-black uppercase tracking-tight leading-none">Super <span className="text-purple-400">Admin</span></h1><p className="text-[7px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-1">👑 Root Access</p></div>
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {NAV.map(tab => (
             <motion.button key={tab.id} onClick={() => setActiveTab(tab.id)} whileHover={{ x: 4 }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === tab.id ? "bg-purple-500 text-white shadow-lg shadow-purple-500/30" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"}`}>
@@ -523,37 +778,43 @@ const SuperAdmin = () => {
         </div>
       </aside>
 
+      {/* MAIN */}
       <main className="flex-1 overflow-y-auto relative z-10">
         <div className="sticky top-0 z-40 bg-[#030712]/80 backdrop-blur-xl border-b border-white/[0.05] px-8 py-4 flex items-center justify-between">
           <div><p className="text-[8px] font-bold uppercase tracking-[0.4em] text-slate-600">Root Terminal</p><h2 className="text-xl font-black uppercase tracking-tight mt-0.5">Super <span className="text-purple-400">Admin 👑</span></h2></div>
-          <div className="relative">
-            <motion.button whileTap={{ scale: 0.93 }} onClick={() => setShowNotifs(!showNotifs)} className="relative w-10 h-10 flex items-center justify-center bg-white/[0.04] border border-white/[0.07] rounded-xl hover:border-purple-500/30 transition-all">
-              <Bell size={16} className="text-slate-400" />
-              {unread > 0 && <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full text-[7px] font-black flex items-center justify-center text-white">{unread}</motion.span>}
-            </motion.button>
-            <AnimatePresence>
-              {showNotifs && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 top-14 w-80 bg-[#0d1424] border border-white/[0.08] rounded-2xl shadow-2xl z-50">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-                    <span className="text-[9px] font-black uppercase text-white">Notifications</span>
-                    <button onClick={markAllRead} className="text-[8px] font-bold text-purple-400">Mark all</button>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.length === 0 ? <p className="text-center text-[9px] text-slate-500 py-6">No notifications</p>
-                      : notifications.map(n => (
-                        <div key={n.id} className={`flex gap-3 px-4 py-3 border-b border-white/[0.04] ${!n.is_read ? "bg-purple-500/[0.05]" : "opacity-50"}`}>
-                          <div className="flex-1"><p className="text-[10px] font-medium text-slate-200">{n.message}</p><p className="text-[8px] text-slate-600 mt-1">{new Date(n.created_at).toLocaleTimeString()}</p></div>
-                        </div>
-                      ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className="flex items-center gap-3">
+            <button onClick={fetchAll} className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white"><RefreshCw size={16} /></button>
+            <div className="relative">
+              <motion.button whileTap={{ scale: 0.93 }} onClick={() => setShowNotifs(!showNotifs)} className="relative w-10 h-10 flex items-center justify-center bg-white/[0.04] border border-white/[0.07] rounded-xl hover:border-purple-500/30 transition-all">
+                <Bell size={16} className="text-slate-400" />
+                {unread > 0 && <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full text-[7px] font-black flex items-center justify-center text-white">{unread}</motion.span>}
+              </motion.button>
+              <AnimatePresence>
+                {showNotifs && (
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 top-14 w-80 bg-[#0d1424] border border-white/[0.08] rounded-2xl shadow-2xl z-50">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+                      <span className="text-[9px] font-black uppercase">Notifications</span>
+                      <button onClick={markAllRead} className="text-[8px] font-bold text-purple-400">Mark all read</button>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length === 0 ? <p className="text-center text-[9px] text-slate-500 py-6">No notifications</p>
+                        : notifications.map(n => (
+                          <div key={n.id} className={`px-4 py-3 border-b border-white/[0.04] ${!n.is_read ? "bg-purple-500/[0.05]" : "opacity-50"}`}>
+                            <p className="text-[10px] text-slate-200">{n.message}</p>
+                            <p className="text-[8px] text-slate-600 mt-1">{new Date(n.created_at).toLocaleTimeString()}</p>
+                          </div>
+                        ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
         <div className="p-8 max-w-7xl mx-auto">
 
+          {/* DASHBOARD */}
           {activeTab === "dashboard" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -564,8 +825,8 @@ const SuperAdmin = () => {
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-[#0b0f1a] border border-white/[0.06] p-6 rounded-2xl">
-                  <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-500 mb-4">Arenas Overview</p>
-                  <div className="space-y-4">{arenas.slice(0, 5).map(a => (<div key={a.id} className="space-y-2"><div className="flex justify-between"><span className="text-[10px] font-black">{a.name}</span><span className="text-[9px] text-slate-500">{a.city}</span></div><MiniBar value={30} max={50} /></div>))}</div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-500 mb-4">Arenas</p>
+                  {arenas.slice(0, 5).map(a => (<div key={a.id} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0"><span className="text-[10px] font-black">{a.name}</span><span className="text-[9px] text-slate-500">{a.city}</span></div>))}
                 </div>
                 <div className="bg-[#0b0f1a] border border-white/[0.06] p-6 rounded-2xl">
                   <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-500 mb-4">System Status</p>
@@ -580,69 +841,78 @@ const SuperAdmin = () => {
           )}
 
           {activeTab === "featured" && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}><FeaturedArenaManager /></motion.div>}
-
           {activeTab === "approvals" && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ArenaApprovalPanel /></motion.div>}
+          {activeTab === "arenas" && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ArenaControlPanel accentColor="purple" /></motion.div>}
 
+          {/* ADMIN MANAGEMENT */}
           {activeTab === "admin_mgmt" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <div className="bg-[#0b0f1a] border border-white/[0.06] p-6 rounded-2xl">
-                <h3 className="text-xl font-black uppercase">Manage Admin Access</h3>
-                <p className="text-[9px] font-bold text-slate-500 uppercase mt-1 mb-6">Promote existing users to admin roles</p>
+                <h3 className="text-xl font-black uppercase mb-1">Manage Admin Access</h3>
+                <p className="text-[9px] font-bold text-slate-500 uppercase mb-6">Promote or demote existing users</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div><label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-2">User Email</label>
-                    <input type="email" placeholder="user@email.com" value={newAdmin.email} onChange={(e) => setNewAdmin({ ...newAdmin, email: e.target.value })} className="w-full bg-black/40 border border-white/[0.07] rounded-xl px-4 py-3 text-[10px] font-bold outline-none focus:border-purple-500/40" />
+                  <div className="md:col-span-1">
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-2">User Email</label>
+                    <input type="email" placeholder="user@email.com" value={newAdmin.email}
+                      onChange={e => { setNewAdmin({ ...newAdmin, email: e.target.value }); setRoleMsg(null) }}
+                      className="w-full bg-black/40 border border-white/[0.07] rounded-xl px-4 py-3 text-[10px] font-bold outline-none focus:border-purple-500/40 text-white" />
                   </div>
-                  <div><label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-2">Assign Role</label>
+                  <div>
+                    <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-2">Assign Role</label>
                     <select value={newAdmin.role} onChange={e => setNewAdmin({ ...newAdmin, role: e.target.value })} className="w-full bg-black/40 border border-white/[0.07] rounded-xl px-4 py-3 text-[10px] font-bold outline-none focus:border-purple-500/40 text-white">
-                      <option value="admin">Admin</option><option value="superadmin">Superadmin</option><option value="owner">Owner</option><option value="venue_manager">Venue Manager</option>
+                      <option value="admin">Admin</option>
+                      <option value="superadmin">Superadmin</option>
+                      <option value="owner">Owner</option>
+                      <option value="venue_manager">Venue Manager</option>
+                      <option value="user">User (demote)</option>
                     </select>
                   </div>
                   <div className="flex items-end">
-                    <motion.button whileTap={{ scale: 0.98 }} onClick={handleAddAdmin} disabled={addingAdmin} className="w-full bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white py-3 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2">
-                      {addingAdmin ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><UserPlus size={14} /> Promote User</>}
+                    <motion.button whileTap={{ scale: 0.98 }} onClick={handleAddAdmin} disabled={addingAdmin}
+                      className="w-full bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white py-3 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2">
+                      {addingAdmin ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><UserPlus size={14} /> Apply Role</>}
                     </motion.button>
                   </div>
                 </div>
-                <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-3 text-[9px] text-yellow-400/80 font-bold">⚠️ User must already have an account.</div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {admins.map((admin, idx) => (
-                  <motion.div layout key={idx} className="bg-[#0b0f1a] border border-white/[0.06] p-5 rounded-2xl flex items-center justify-between hover:border-purple-500/20 transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border text-xl ${admin.roles?.name === 'superadmin' ? 'bg-purple-500/20 border-purple-500/30' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
-                        {admin.roles?.name === 'superadmin' ? '👑' : <UserCheck size={20} />}
-                      </div>
-                      <div>
-                        <h4 className="font-black text-sm uppercase tracking-tight">{admin.profiles?.name || 'Unknown'}</h4>
-                        <p className="text-[9px] text-slate-500 mt-0.5">{admin.profiles?.email}</p>
-                        <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full mt-1 inline-block ${admin.roles?.name === 'superadmin' ? 'bg-purple-500/10 text-purple-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{admin.roles?.name}</span>
-                      </div>
-                    </div>
-                    {admin.roles?.name !== 'superadmin' && (
-                      <motion.button whileTap={{ scale: 0.9 }} onClick={() => removeAdmin(admin.user_id)} className="w-10 h-10 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><Trash2 size={16} /></motion.button>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {activeTab === "arenas" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="bg-[#0b0f1a] border border-white/[0.06] p-5 rounded-2xl flex items-center gap-3">
-                <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-400 border border-purple-500/20"><Layers size={20} /></div>
-                <div><h3 className="font-black uppercase text-base">Arena Inventory</h3><p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">{arenas.length} arenas in DB</p></div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {arenas.map(arena => (
-                  <div key={arena.id} className="bg-[#0b0f1a] border border-white/[0.06] rounded-2xl p-5 hover:border-purple-500/20 transition-all">
-                    <div className="flex justify-between items-start">
-                      <div><h4 className="font-black text-lg">{arena.name}</h4><div className="flex items-center gap-1.5 mt-2 text-slate-500"><MapPin size={11} className="text-purple-400" /><p className="text-[9px] font-medium">{arena.location} · {arena.city}</p></div></div>
-                      <span className={`text-[8px] font-bold px-2 py-1 rounded-full ${arena.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{arena.is_active ? 'Active' : 'Inactive'}</span>
-                    </div>
+                {roleMsg && (
+                  <div className={`rounded-xl p-3 text-[10px] font-bold ${roleMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                    {roleMsg.text}
                   </div>
-                ))}
+                )}
+                <div className="mt-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-3 text-[9px] text-yellow-400/80 font-bold">
+                  ⚠️ User must already have an account. Changes apply immediately — list below refreshes automatically.
+                </div>
+              </div>
+
+              {/* ADMINS LIST */}
+              <div>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">Current Admins & Staff ({admins.length})</p>
+                {admins.length === 0 ? (
+                  <div className="text-center py-12 opacity-40"><Users size={40} className="mx-auto mb-3" /><p className="font-black uppercase text-sm">No admins found</p></div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {admins.map((admin, idx) => (
+                      <motion.div layout key={idx} className="bg-[#0b0f1a] border border-white/[0.06] p-5 rounded-2xl flex items-center justify-between hover:border-purple-500/20 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center border text-xl ${admin.roles?.name === 'superadmin' ? 'bg-purple-500/20 border-purple-500/30' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
+                            {admin.roles?.name === 'superadmin' ? '👑' : <UserCheck size={20} />}
+                          </div>
+                          <div>
+                            <h4 className="font-black text-sm uppercase tracking-tight">{admin.profiles?.name || 'Unknown'}</h4>
+                            <p className="text-[9px] text-slate-500 mt-0.5">{admin.profiles?.email}</p>
+                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full mt-1 inline-block ${admin.roles?.name === 'superadmin' ? 'bg-purple-500/10 text-purple-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{admin.roles?.name}</span>
+                          </div>
+                        </div>
+                        {admin.roles?.name !== 'superadmin' && (
+                          <motion.button whileTap={{ scale: 0.9 }} onClick={() => removeAdmin(admin.user_id, admin.profiles?.name)}
+                            className="w-10 h-10 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
+                            <Trash2 size={16} />
+                          </motion.button>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -661,42 +931,49 @@ const SuperAdmin = () => {
             </motion.div>
           )}
 
+          {/* PLAYERS */}
           {activeTab === "players" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
               <div className="flex items-center justify-between">
-                <div><h3 className="text-xl font-black uppercase">Player Management</h3><p className="text-[9px] font-bold text-slate-500 uppercase mt-1">{allPlayers.length} total players</p></div>
-                <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500" size={14} /><input type="text" placeholder="Search players..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-black/40 border border-white/[0.07] rounded-lg pl-9 pr-4 py-2 text-[10px] font-bold outline-none focus:border-purple-500/50 transition-all" /></div>
+                <div><h3 className="text-xl font-black uppercase">All Players</h3><p className="text-[9px] font-bold text-slate-500 uppercase mt-1">{allPlayers.length} registered</p></div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                  <input type="text" placeholder="Search by name or email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-black/40 border border-white/[0.07] rounded-lg pl-9 pr-4 py-2 text-[10px] font-bold outline-none focus:border-purple-500/50 transition-all w-64" />
+                </div>
               </div>
-              <div className="space-y-2">
-                {filteredPlayers.map(player => (
-                  <div key={player.id} className="bg-[#0b0f1a] border border-white/[0.06] p-4 rounded-xl hover:border-purple-500/20 transition-all">
-                    <div className="flex items-center justify-between">
-                      <div><h4 className="font-black text-sm">{player.name || 'Unknown'}</h4><p className="text-[9px] text-slate-500">{player.email}</p><p className="text-[8px] text-slate-600 mt-1">Joined: {new Date(player.created_at).toLocaleDateString()}</p></div>
-                      <Eye size={16} className="text-slate-400" />
+              {allPlayers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 text-center opacity-40">
+                  <Users size={48} className="mb-4" />
+                  <p className="font-black uppercase">No players found</p>
+                  <p className="text-[10px] mt-2 max-w-xs">Run this SQL in Supabase: CREATE POLICY "Admin view all profiles" ON public.profiles FOR SELECT USING (true);</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filteredPlayers.map(player => (
+                    <div key={player.id} className="bg-[#0b0f1a] border border-white/[0.06] p-4 rounded-xl hover:border-purple-500/20 transition-all">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center text-[11px] font-black text-purple-400">
+                              {player.name?.[0]?.toUpperCase() || '?'}
+                            </div>
+                            <div>
+                              <h4 className="font-black text-sm">{player.name || 'Unknown'}</h4>
+                              <p className="text-[9px] text-slate-500">{player.email}</p>
+                            </div>
+                          </div>
+                          <p className="text-[8px] text-slate-600 mt-2 pl-10">Joined {new Date(player.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                        </div>
+                        <Eye size={16} className="text-slate-600" />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
 
-          {activeTab === "chat" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
-              <h3 className="text-xl font-black uppercase">Admin Chat Room 👑</h3>
-              <div className="bg-[#0b0f1a] border border-white/[0.06] rounded-2xl overflow-hidden flex flex-col h-[600px]">
-                <div className="flex-1 overflow-y-auto p-5 space-y-3">
-                  {chatMessages.length === 0 ? <p className="text-center text-slate-600 text-[10px] pt-10">No messages yet</p>
-                    : chatMessages.map(msg => (<div key={msg.id} className="flex justify-end"><div className="max-w-xs px-4 py-2.5 rounded-lg text-[10px] bg-purple-500/15 border border-purple-500/20 text-slate-200">{msg.message}</div></div>))}
-                </div>
-                <div className="border-t border-white/[0.06] p-4 flex gap-2 bg-black/40">
-                  <input type="text" placeholder="Type message..." value={chatInput} onChange={(e) => setChatInput(e.target.value)}
-                    onKeyPress={(e) => { if (e.key === "Enter" && chatInput.trim()) { setChatMessages(prev => [...prev, { id: Date.now(), message: chatInput, created_at: new Date().toISOString() }]); setChatInput("") } }}
-                    className="flex-1 bg-black/40 border border-white/[0.07] rounded-lg px-4 py-2.5 text-[10px] font-bold outline-none focus:border-purple-500/50 text-white placeholder-slate-600" />
-                  <motion.button whileTap={{ scale: 0.92 }} onClick={() => { if (chatInput.trim()) { setChatMessages(prev => [...prev, { id: Date.now(), message: chatInput, created_at: new Date().toISOString() }]); setChatInput("") } }} className="bg-purple-500 hover:bg-purple-400 text-white px-6 py-2.5 rounded-lg font-black flex items-center gap-2"><Send size={14} /></motion.button>
-                </div>
-              </div>
-            </motion.div>
-          )}
+          {activeTab === "chat" && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}><AdminChat accentColor="purple" /></motion.div>}
         </div>
       </main>
     </div>
