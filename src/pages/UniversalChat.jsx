@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, Send, UserPlus, MoreVertical,
-  Swords, Loader2, Users
+  Swords, Loader2
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 

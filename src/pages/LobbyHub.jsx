@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search, MapPin, X, Navigation, Plus, User, UserPlus,
-  UserCheck, MessageCircle, Crown, Zap, Users, Eye,
-  Flame, Award, Clock, Check, Loader2
+  MessageCircle, Zap, Eye,
+  Award, Clock, Check, Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
@@ -119,15 +119,6 @@ function LobbyHub() {
     navigate(`/chat/direct/${playerId}`)
   }
 
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371
-    const dLat = (lat2 - lat1) * (Math.PI / 180)
-    const dLon = (lon2 - lon1) * (Math.PI / 180)
-    const a = Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
-  }
-
   const getAuraRank = (aura) => {
     if (aura >= 80) return { label: 'Diamond', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' }
     if (aura >= 60) return { label: 'Platinum', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' }
@@ -229,9 +220,6 @@ function LobbyHub() {
               players.map(player => {
                 const stats = player.player_stats?.[0] || {}
                 const rank = getAuraRank(stats.aura_level || 0)
-                const winRate = stats.matches_played > 0
-                  ? Math.round((stats.matches_won / stats.matches_played) * 100)
-                  : 0
 
                 return (
                   <motion.div

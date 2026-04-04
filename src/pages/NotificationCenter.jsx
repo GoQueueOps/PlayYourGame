@@ -45,7 +45,7 @@ function NotificationCenter() {
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [user])
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchNotifications = async () => {
     setLoading(true)

@@ -25,7 +25,7 @@ function Wallet() {
   useEffect(() => {
     if (!user) return
     fetchAll()
-  }, [user])
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAll = async () => {
     setLoading(true)
