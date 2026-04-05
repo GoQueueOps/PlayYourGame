@@ -204,12 +204,15 @@ function PlayAreaDetail() {
     // Build HH:MM:00 to match Supabase time format
     const timeStr = `${String(hour).padStart(2, '0')}:00:00`
 
-    // Match against this court's pricing rules
+    // Normalize time to HH:MM for comparison (handles "06:00", "06:00:00", etc.)
+    const toHHMM = (t) => (t || '').slice(0, 5) // "06:00:00" -> "06:00"
+    const slotHHMM = `${String(hour).padStart(2, '0')}:00`
+
     const rules = court.pricingRules || []
     const matchingRule = rules.find(r => {
-      const start = r.start_time?.slice(0, 8) || '00:00:00'
-      const end = r.end_time?.slice(0, 8) || '23:59:59'
-      return timeStr >= start && timeStr < end
+      const start = toHHMM(r.start_time) || '00:00'
+      const end = toHHMM(r.end_time) || '23:59'
+      return slotHHMM >= start && slotHHMM < end
     })
 
     if (matchingRule) {

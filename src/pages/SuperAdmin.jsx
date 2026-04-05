@@ -14,6 +14,12 @@ import { supabase } from "../lib/supabase";
 const SPORTS_LIST = ["Cricket", "Football", "Basketball", "Badminton", "Tennis", "Pickleball"];
 const ADMIN_CHAT_GROUP_ID = '00000000-0000-0000-0000-000000000001';
 
+const toTimeDB = (t) => {
+  if (!t) return '06:00:00'
+  const parts = t.split(':')
+  return `${parts[0].padStart(2,'0')}:${(parts[1]||'00').padStart(2,'0')}:00`
+}
+
 // ─── STAT CARD ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, icon, color, change }) {
   const up = change >= 0;
@@ -409,7 +415,7 @@ function ArenaControlPanel({ accentColor = 'purple' }) {
     const { data: court, error } = await supabase.from('courts').insert({ arena_id: selectedArena.id, sport_id: sportRow.id, name: newCourt.name, price_per_hour: newCourt.pricing[0]?.price || 500, is_active: true }).select().single()
     if (error) { alert('Error: ' + error.message); setSaving(false); return }
     for (const rule of newCourt.pricing) {
-      await supabase.from('pricing_rules').insert({ court_id: court.id, start_time: rule.startTime, end_time: rule.endTime, price_per_hour: rule.price })
+      await supabase.from('pricing_rules').insert({ court_id: court.id, start_time: toTimeDB(rule.startTime), end_time: toTimeDB(rule.endTime), price_per_hour: rule.price })
     }
     setNewCourt({ sport: 'Cricket', name: '', pricing: [{ startTime: '06:00', endTime: '22:00', price: 500 }] })
     setShowAddCourt(false)
@@ -417,9 +423,23 @@ function ArenaControlPanel({ accentColor = 'purple' }) {
     setSaving(false)
   }
 
-  const addPricingRule = async (courtId) => { const { data: rule } = await supabase.from('pricing_rules').insert({ court_id: courtId, start_time: '06:00', end_time: '22:00', price_per_hour: 500 }).select().single(); if (rule) setPricingRules(prev => ({ ...prev, [courtId]: [...(prev[courtId] || []), rule] })) }
+  const addPricingRule = async (courtId) => {
+    console.log('Adding pricing rule for court:', courtId)
+    const { data: rule, error } = await supabase
+      .from('pricing_rules')
+      .insert({ court_id: courtId, start_time: '06:00:00', end_time: '22:00:00', price_per_hour: 500 })
+      .select()
+      .single()
+    if (error) {
+      console.error('pricing_rules insert error:', error)
+      alert('Failed to add interval: ' + error.message)
+      return
+    }
+    console.log('Pricing rule added:', rule)
+    if (rule) setPricingRules(prev => ({ ...prev, [courtId]: [...(prev[courtId] || []), rule] }))
+  }
   const updatePricingRule = (courtId, ruleId, field, value) => setPricingRules(prev => ({ ...prev, [courtId]: prev[courtId].map(r => r.id === ruleId ? { ...r, [field]: value } : r) }))
-  const savePricingRule = async (rule) => { await supabase.from('pricing_rules').update({ start_time: rule.start_time, end_time: rule.end_time, price_per_hour: rule.price_per_hour }).eq('id', rule.id) }
+  const savePricingRule = async (rule) => { await supabase.from('pricing_rules').update({ start_time: toTimeDB(rule.start_time), end_time: toTimeDB(rule.end_time), price_per_hour: rule.price_per_hour }).eq('id', rule.id) }
   const deletePricingRule = async (courtId, ruleId) => { await supabase.from('pricing_rules').delete().eq('id', ruleId); setPricingRules(prev => ({ ...prev, [courtId]: prev[courtId].filter(r => r.id !== ruleId) })) }
 
   const handleSaveArena = async () => {
@@ -434,7 +454,7 @@ function ArenaControlPanel({ accentColor = 'purple' }) {
         await supabase.from('arena_sports').insert({ arena_id: newArena.id, sport_id: sportRow.id })
         for (const ct of cts) {
           const { data: c } = await supabase.from('courts').insert({ arena_id: newArena.id, sport_id: sportRow.id, name: ct.name, price_per_hour: ct.pricing[0]?.price || 500, is_active: true }).select().single()
-          if (c) for (const rule of ct.pricing) await supabase.from('pricing_rules').insert({ court_id: c.id, start_time: rule.startTime, end_time: rule.endTime, price_per_hour: rule.price })
+          if (c) for (const rule of ct.pricing) await supabase.from('pricing_rules').insert({ court_id: c.id, start_time: toTimeDB(rule.startTime), end_time: toTimeDB(rule.endTime), price_per_hour: rule.price })
         }
       }
       setArenaForm(BLANK_ARENA_FORM_SA); setView('list'); await fetchArenas()
@@ -618,11 +638,11 @@ function ArenaControlPanel({ accentColor = 'purple' }) {
                         : (pricingRules[court.id] || []).map(rule => (
                           <div key={rule.id} className="flex items-center gap-2 bg-black/30 p-3 rounded-xl">
                             <div className="flex items-center gap-2 flex-1 flex-wrap">
-                              <input type="time" value={rule.start_time?.slice(0,5) || '06:00'} onChange={e => updatePricingRule(court.id, rule.id, 'start_time', e.target.value)} onBlur={() => savePricingRule(rule)} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none [color-scheme:dark]" />
+                              <input type="time" value={rule.start_time?.slice(0,5) || '06:00'} onChange={e => updatePricingRule(court.id, rule.id, 'start_time', e.target.value)} onBlur={e => savePricingRule({ ...rule, start_time: e.target.value })} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none [color-scheme:dark]" />
                               <span className="text-slate-500 text-[10px]">→</span>
-                              <input type="time" value={rule.end_time?.slice(0,5) || '22:00'} onChange={e => updatePricingRule(court.id, rule.id, 'end_time', e.target.value)} onBlur={() => savePricingRule(rule)} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none [color-scheme:dark]" />
+                              <input type="time" value={rule.end_time?.slice(0,5) || '22:00'} onChange={e => updatePricingRule(court.id, rule.id, 'end_time', e.target.value)} onBlur={e => savePricingRule({ ...rule, end_time: e.target.value })} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none [color-scheme:dark]" />
                               <span className="text-slate-500 text-[10px]">₹</span>
-                              <input type="number" value={rule.price_per_hour} onChange={e => updatePricingRule(court.id, rule.id, 'price_per_hour', parseInt(e.target.value))} onBlur={() => savePricingRule(rule)} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none w-24" />
+                              <input type="number" value={rule.price_per_hour} onChange={e => updatePricingRule(court.id, rule.id, 'price_per_hour', parseInt(e.target.value))} onBlur={e => savePricingRule({ ...rule, price_per_hour: parseInt(e.target.value) })} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none w-24" />
                               <span className="text-slate-600 text-[9px]">/hr</span>
                               <select value={rule.day_type || 'all'} onChange={e => { updatePricingRule(court.id, rule.id, 'day_type', e.target.value); setTimeout(() => savePricingRule({ ...rule, day_type: e.target.value }), 100) }} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[9px] text-white outline-none">
                                 <option value="all">All Days</option><option value="weekday">Weekdays</option><option value="weekend">Weekends</option>
