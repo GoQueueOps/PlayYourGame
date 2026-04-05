@@ -202,7 +202,6 @@ function PlayAreaDetail() {
 
     const hour = slotToHour(startTime)
     // Build HH:MM:00 to match Supabase time format
-    const timeStr = `${String(hour).padStart(2, '0')}:00:00`
 
     // Normalize time to HH:MM for comparison (handles "06:00", "06:00:00", etc.)
     const toHHMM = (t) => (t || '').slice(0, 5) // "06:00:00" -> "06:00"
