@@ -32,8 +32,7 @@ const fetchArenaFromDB = async (id) => {
       ),
       courts (
         id, name, price_per_hour, is_active,
-        sports (id, name, emoji),
-        pricing_rules (id, start_time, end_time, price_per_hour, day_type)
+        sports (id, name, emoji)
       )
     `)
     .eq('id', id)
@@ -62,7 +61,7 @@ const fetchArenaFromDB = async (id) => {
       physicalID: court.id,
       pricePerHour: court.price_per_hour,
       sport: court.sports,
-      pricingRules: court.pricing_rules || []
+      pricingRules: [] // loaded separately after fetch
     })
   })
 
@@ -70,6 +69,25 @@ const fetchArenaFromDB = async (id) => {
   const sports = (data.arena_sports || []).map(as => as.sports).filter(Boolean)
   const prices = activeCourts.map(c => c.price_per_hour).filter(Boolean)
   const minPrice = prices.length > 0 ? Math.min(...prices) : 0
+
+  // Fetch pricing rules separately (pricing_rules.court_id -> courts)
+  const courtIds = activeCourts.map(c => c.id)
+  if (courtIds.length > 0) {
+    const { data: rules } = await supabase
+      .from('pricing_rules')
+      .select('id, court_id, start_time, end_time, price_per_hour, day_type')
+      .in('court_id', courtIds)
+      .order('start_time')
+
+    if (rules && rules.length > 0) {
+      // Attach rules to each court in sportsManaged
+      Object.values(sportsManaged).forEach(courts => {
+        courts.forEach(court => {
+          court.pricingRules = rules.filter(r => r.court_id === court.physicalID)
+        })
+      })
+    }
+  }
 
   return {
     id: data.id,
@@ -88,7 +106,6 @@ const fetchArenaFromDB = async (id) => {
     sports,
     sportsManaged,
     pricePerHour: minPrice,
-    pricingRules: [] // pricing rules now live on each court in sportsManaged
   }
 }
 
