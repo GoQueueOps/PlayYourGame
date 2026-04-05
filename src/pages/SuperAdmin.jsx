@@ -331,19 +331,31 @@ function ArenaApprovalPanel() {
 }
 
 // ─── ARENA CONTROL ─────────────────────────────────────────────────────────────
+const AMENITIES_LIST_SA = [
+  { id: 'parking', label: 'Free Parking' }, { id: 'wifi', label: 'Free Wi-Fi' },
+  { id: 'snacks', label: 'Snacks & Drinks' }, { id: 'ac', label: 'Air Conditioning' },
+  { id: 'firstaid', label: 'First Aid' },
+]
+const BLANK_ARENA_FORM_SA = { name: '', address: '', city: '', state: '', phone: '', description: '', amenities: [], sports: {} }
+
 function ArenaControlPanel({ accentColor = 'purple' }) {
+  const ac = accentColor === 'purple'
+    ? { ring: 'border-purple-500/50 bg-purple-500/10', btn: 'bg-purple-500 text-white', panel: 'bg-purple-500/5 border-purple-500/20', text: 'text-purple-400', focus: 'focus:border-purple-500/50' }
+    : { ring: 'border-emerald-500/50 bg-emerald-500/10', btn: 'bg-emerald-500 text-black', panel: 'bg-emerald-500/5 border-emerald-500/20', text: 'text-emerald-400', focus: 'focus:border-emerald-500/50' }
+
   const [arenas, setArenas] = useState([])
   const [selectedArena, setSelectedArena] = useState(null)
-  const [courts, setCourts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [editingCourt, setEditingCourt] = useState(null)
+  const [view, setView] = useState('list')
+  const [courts, setCourts] = useState([])
+  const [expandedCourt, setExpandedCourt] = useState(null)
+  const [editingCourtName, setEditingCourtName] = useState({})
+  const [pricingRules, setPricingRules] = useState({})
   const [showAddCourt, setShowAddCourt] = useState(false)
+  const [newCourt, setNewCourt] = useState({ sport: 'Cricket', name: '', pricing: [{ startTime: '06:00', endTime: '22:00', price: 500 }] })
   const [saving, setSaving] = useState(false)
-  const [newCourt, setNewCourt] = useState({ sport: 'Cricket', name: '', price: 500 })
-
-  const accent = accentColor === 'purple'
-    ? { ring: 'border-purple-500/50 bg-purple-500/10', btn: 'bg-purple-500 text-white', addPanel: 'border-purple-500/20 bg-purple-500/5', text: 'text-purple-400' }
-    : { ring: 'border-emerald-500/50 bg-emerald-500/10', btn: 'bg-emerald-500 text-black', addPanel: 'border-emerald-500/20 bg-emerald-500/5', text: 'text-emerald-400' }
+  const [arenaForm, setArenaForm] = useState(BLANK_ARENA_FORM_SA)
+  const [savingArena, setSavingArena] = useState(false)
 
   useEffect(() => { fetchArenas() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -355,183 +367,264 @@ function ArenaControlPanel({ accentColor = 'purple' }) {
   }
 
   const loadCourts = async (arenaId) => {
-    const { data } = await supabase.from('courts').select('id, name, price_per_hour, is_active, sports(name, emoji)').eq('arena_id', arenaId).order('name')
-    if (data) setCourts(data)
+    const { data } = await supabase.from('courts').select('id, name, price_per_hour, is_active, sports(id, name, emoji)').eq('arena_id', arenaId).order('name')
+    if (data) {
+      setCourts(data)
+      const ids = data.map(c => c.id)
+      if (ids.length > 0) {
+        const { data: rules } = await supabase.from('pricing_rules').select('*').in('court_id', ids).order('start_time')
+        const map = {}
+        ids.forEach(id => { map[id] = [] })
+        rules?.forEach(r => { map[r.court_id] = [...(map[r.court_id] || []), r] })
+        setPricingRules(map)
+      } else { setPricingRules({}) }
+    }
   }
 
-  const selectArena = async (arena) => {
-    setSelectedArena(arena)
-    setEditingCourt(null)
-    setShowAddCourt(false)
-    await loadCourts(arena.id)
-  }
-
-  const toggleArenaActive = async (arenaId, cur) => {
-    await supabase.from('arenas').update({ is_active: !cur }).eq('id', arenaId)
-    setArenas(prev => prev.map(a => a.id === arenaId ? { ...a, is_active: !cur } : a))
-    if (selectedArena?.id === arenaId) setSelectedArena(prev => ({ ...prev, is_active: !cur }))
-  }
-
-  const saveCourtEdit = async () => {
-    if (!editingCourt) return
-    setSaving(true)
-    const { error } = await supabase.from('courts').update({ name: editingCourt.name, price_per_hour: editingCourt.price }).eq('id', editingCourt.id)
-    if (error) { alert('Error: ' + error.message); setSaving(false); return }
-    setEditingCourt(null)
-    await loadCourts(selectedArena.id)
-    setSaving(false)
-  }
-
-  const toggleCourtActive = async (courtId, cur) => {
-    await supabase.from('courts').update({ is_active: !cur }).eq('id', courtId)
-    await loadCourts(selectedArena.id)
-  }
+  const selectArena = async (arena) => { setSelectedArena(arena); setExpandedCourt(null); setShowAddCourt(false); setView('courts'); await loadCourts(arena.id) }
+  const toggleArenaActive = async (arenaId, cur) => { await supabase.from('arenas').update({ is_active: !cur }).eq('id', arenaId); setArenas(prev => prev.map(a => a.id === arenaId ? { ...a, is_active: !cur } : a)) }
+  const saveCourtName = async (courtId) => { const name = editingCourtName[courtId]; if (!name?.trim()) return; await supabase.from('courts').update({ name }).eq('id', courtId); setCourts(prev => prev.map(c => c.id === courtId ? { ...c, name } : c)); setEditingCourtName(prev => { const n = { ...prev }; delete n[courtId]; return n }) }
+  const toggleCourtActive = async (courtId, cur) => { await supabase.from('courts').update({ is_active: !cur }).eq('id', courtId); setCourts(prev => prev.map(c => c.id === courtId ? { ...c, is_active: !cur } : c)) }
+  const deleteCourt = async (courtId) => { if (!window.confirm('Delete this court?')) return; await supabase.from('courts').delete().eq('id', courtId); setCourts(prev => prev.filter(c => c.id !== courtId)) }
 
   const addCourt = async () => {
     if (!newCourt.name.trim()) { alert('Enter court name'); return }
     setSaving(true)
     const { data: sportRow } = await supabase.from('sports').select('id').eq('name', newCourt.sport).single()
-    if (!sportRow) { alert(`Sport "${newCourt.sport}" not found in DB. Add it first.`); setSaving(false); return }
-    const { error } = await supabase.from('courts').insert({ arena_id: selectedArena.id, sport_id: sportRow.id, name: newCourt.name, price_per_hour: newCourt.price, is_active: true })
+    if (!sportRow) { alert('Sport not found'); setSaving(false); return }
+    const { data: court, error } = await supabase.from('courts').insert({ arena_id: selectedArena.id, sport_id: sportRow.id, name: newCourt.name, price_per_hour: newCourt.pricing[0]?.price || 500, is_active: true }).select().single()
     if (error) { alert('Error: ' + error.message); setSaving(false); return }
-    setNewCourt({ sport: 'Cricket', name: '', price: 500 })
+    for (const rule of newCourt.pricing) {
+      await supabase.from('pricing_rules').insert({ court_id: court.id, start_time: rule.startTime, end_time: rule.endTime, price_per_hour: rule.price })
+    }
+    setNewCourt({ sport: 'Cricket', name: '', pricing: [{ startTime: '06:00', endTime: '22:00', price: 500 }] })
     setShowAddCourt(false)
     await loadCourts(selectedArena.id)
     setSaving(false)
   }
+
+  const addPricingRule = async (courtId) => { const { data: rule } = await supabase.from('pricing_rules').insert({ court_id: courtId, start_time: '06:00', end_time: '22:00', price_per_hour: 500 }).select().single(); if (rule) setPricingRules(prev => ({ ...prev, [courtId]: [...(prev[courtId] || []), rule] })) }
+  const updatePricingRule = (courtId, ruleId, field, value) => setPricingRules(prev => ({ ...prev, [courtId]: prev[courtId].map(r => r.id === ruleId ? { ...r, [field]: value } : r) }))
+  const savePricingRule = async (rule) => { await supabase.from('pricing_rules').update({ start_time: rule.start_time, end_time: rule.end_time, price_per_hour: rule.price_per_hour }).eq('id', rule.id) }
+  const deletePricingRule = async (courtId, ruleId) => { await supabase.from('pricing_rules').delete().eq('id', ruleId); setPricingRules(prev => ({ ...prev, [courtId]: prev[courtId].filter(r => r.id !== ruleId) })) }
+
+  const handleSaveArena = async () => {
+    if (!arenaForm.name || !arenaForm.address) { alert('Name and address required'); return }
+    setSavingArena(true)
+    try {
+      const { data: newArena, error } = await supabase.from('arenas').insert({ name: arenaForm.name, location: arenaForm.address, city: arenaForm.city, state: arenaForm.state, phone: arenaForm.phone, description: arenaForm.description, is_active: true }).select().single()
+      if (error) throw error
+      for (const [sportName, cts] of Object.entries(arenaForm.sports || {})) {
+        const { data: sportRow } = await supabase.from('sports').select('id').eq('name', sportName).single()
+        if (!sportRow) continue
+        await supabase.from('arena_sports').insert({ arena_id: newArena.id, sport_id: sportRow.id })
+        for (const ct of cts) {
+          const { data: c } = await supabase.from('courts').insert({ arena_id: newArena.id, sport_id: sportRow.id, name: ct.name, price_per_hour: ct.pricing[0]?.price || 500, is_active: true }).select().single()
+          if (c) for (const rule of ct.pricing) await supabase.from('pricing_rules').insert({ court_id: c.id, start_time: rule.startTime, end_time: rule.endTime, price_per_hour: rule.price })
+        }
+      }
+      setArenaForm(BLANK_ARENA_FORM_SA); setView('list'); await fetchArenas()
+      alert(`✅ Arena "${newArena.name}" is live!`)
+    } catch (err) { alert('Error: ' + err.message) }
+    setSavingArena(false)
+  }
+
+  const toggleArenaFormSport = (sport) => { if (arenaForm.sports[sport]) { const s = { ...arenaForm.sports }; delete s[sport]; setArenaForm({ ...arenaForm, sports: s }) } else { setArenaForm({ ...arenaForm, sports: { ...arenaForm.sports, [sport]: [{ name: 'Court 1', pricing: [{ startTime: '06:00', endTime: '22:00', price: 500 }] }] } }) } }
+  const addArenaFormCourt = (sport) => { const u = { ...arenaForm.sports }; u[sport] = [...u[sport], { name: `Court ${u[sport].length + 1}`, pricing: [{ startTime: '06:00', endTime: '22:00', price: 500 }] }]; setArenaForm({ ...arenaForm, sports: u }) }
+  const updateArenaFormCourtName = (sport, idx, val) => { const u = { ...arenaForm.sports }; u[sport][idx] = { ...u[sport][idx], name: val }; setArenaForm({ ...arenaForm, sports: u }) }
+  const addArenaFormSlot = (sport, cIdx) => { const u = { ...arenaForm.sports }; u[sport][cIdx].pricing = [...u[sport][cIdx].pricing, { startTime: '06:00', endTime: '22:00', price: 500 }]; setArenaForm({ ...arenaForm, sports: u }) }
+  const updateArenaFormSlot = (sport, cIdx, pIdx, field, val) => { const u = { ...arenaForm.sports }; u[sport][cIdx].pricing[pIdx] = { ...u[sport][cIdx].pricing[pIdx], [field]: val }; setArenaForm({ ...arenaForm, sports: u }) }
+  const removeArenaFormSlot = (sport, cIdx, pIdx) => { const u = { ...arenaForm.sports }; u[sport][cIdx].pricing = u[sport][cIdx].pricing.filter((_, i) => i !== pIdx); setArenaForm({ ...arenaForm, sports: u }) }
+  const removeArenaFormCourt = (sport, cIdx) => { const u = { ...arenaForm.sports }; u[sport] = u[sport].filter((_, i) => i !== cIdx); setArenaForm({ ...arenaForm, sports: u }) }
+
+  const inputCls = `w-full bg-black/40 border border-white/[0.07] rounded-xl px-4 py-3 text-[10px] font-bold outline-none ${ac.focus} text-white placeholder-slate-600`
 
   return (
     <div className="space-y-6">
       <div className="bg-[#0b0f1a] border border-white/[0.06] p-5 rounded-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${accentColor === 'purple' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}><Layers size={20} /></div>
-          <div><h3 className="font-black uppercase text-base">Arena Control</h3><p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Directly edit arenas and courts</p></div>
+          <div><h3 className="font-black uppercase text-base">Arena Control</h3><p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Add arenas · Manage courts · Set pricing intervals</p></div>
         </div>
-        <button onClick={fetchArenas} className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white"><RefreshCw size={16} /></button>
+        <div className="flex gap-2">
+          {view !== 'list' && <button onClick={() => setView('list')} className="px-4 py-2 text-slate-400 hover:text-white font-black text-[9px] uppercase bg-white/5 rounded-xl">← Back</button>}
+          {view === 'list' && <button onClick={() => { setView('addArena'); setArenaForm(BLANK_ARENA_FORM_SA) }} className={`flex items-center gap-2 ${ac.btn} px-4 py-2.5 rounded-xl font-black text-[10px] uppercase`}><Plus size={14} /> Add Arena</button>}
+          <button onClick={fetchArenas} className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-white"><RefreshCw size={15} /></button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ARENA LIST */}
-        <div className="space-y-2">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Select Arena</p>
-          {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-slate-500" size={24} /></div>
-            : arenas.length === 0 ? <p className="text-[10px] text-slate-600">No arenas found</p>
+      {view === 'list' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {loading ? <div className="col-span-2 flex justify-center py-16"><Loader2 className="animate-spin text-slate-500" size={32} /></div>
+            : arenas.length === 0 ? <div className="col-span-2 text-center py-16 opacity-40"><Layers size={40} className="mx-auto mb-3" /><p className="font-black uppercase">No arenas — add one above</p></div>
             : arenas.map(arena => (
-              <div key={arena.id} onClick={() => selectArena(arena)}
-                className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${selectedArena?.id === arena.id ? accent.ring : 'border-white/[0.06] bg-[#0b0f1a] hover:border-white/20'}`}>
-                <div>
-                  <p className="text-[10px] font-black">{arena.name}</p>
-                  <p className="text-[9px] text-slate-500">{arena.city}</p>
+              <div key={arena.id} className="bg-[#0b0f1a] border border-white/[0.06] rounded-2xl p-5 hover:border-white/20 transition-all">
+                <div className="flex items-start justify-between mb-4">
+                  <div><h4 className="font-black text-base">{arena.name}</h4><p className="text-[9px] text-slate-500 mt-0.5 flex items-center gap-1"><MapPin size={10} /> {arena.city}</p></div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${arena.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{arena.is_active ? 'Live' : 'Off'}</span>
+                    <button onClick={() => toggleArenaActive(arena.id, arena.is_active)} className="p-1.5 bg-white/5 rounded-lg text-slate-400 hover:text-white">{arena.is_active ? <ToggleRight size={16} className="text-emerald-400" /> : <ToggleLeft size={16} />}</button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${arena.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{arena.is_active ? 'Live' : 'Off'}</span>
-                  <button onClick={e => { e.stopPropagation(); toggleArenaActive(arena.id, arena.is_active) }} className="p-1.5 bg-white/5 rounded-lg text-slate-400 hover:text-white transition-all">
-                    {arena.is_active ? <ToggleRight size={16} className="text-emerald-400" /> : <ToggleLeft size={16} />}
-                  </button>
-                </div>
+                <button onClick={() => selectArena(arena)} className={`w-full py-2.5 rounded-xl font-black text-[9px] uppercase flex items-center justify-center gap-2 border ${accentColor === 'purple' ? 'border-purple-500/20 text-purple-400 hover:bg-purple-500/10' : 'border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10'} transition-all`}>
+                  <Edit3 size={12} /> Manage Courts & Pricing
+                </button>
               </div>
             ))}
         </div>
+      )}
 
-        {/* COURTS */}
-        <div className="lg:col-span-2">
-          {!selectedArena ? (
-            <div className="flex items-center justify-center h-48 opacity-40">
-              <div className="text-center"><Layers size={32} className="mx-auto mb-3" /><p className="text-[10px] font-black uppercase">Select an arena to manage courts</p></div>
+      {view === 'addArena' && (
+        <div className="space-y-5">
+          <div className={`border rounded-2xl p-6 space-y-4 ${ac.panel}`}>
+            <p className={`text-[9px] font-black uppercase ${ac.text}`}>Arena Details</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><label className="text-[8px] font-black text-slate-500 uppercase block mb-1.5">Arena Name *</label><input value={arenaForm.name} onChange={e => setArenaForm({ ...arenaForm, name: e.target.value })} placeholder="e.g. Elite Arena" className={inputCls} /></div>
+              <div><label className="text-[8px] font-black text-slate-500 uppercase block mb-1.5">Phone</label><input value={arenaForm.phone} onChange={e => setArenaForm({ ...arenaForm, phone: e.target.value })} placeholder="+91 98765 43210" className={inputCls} /></div>
+              <div><label className="text-[8px] font-black text-slate-500 uppercase block mb-1.5">City</label><input value={arenaForm.city} onChange={e => setArenaForm({ ...arenaForm, city: e.target.value })} placeholder="Cuttack" className={inputCls} /></div>
+              <div><label className="text-[8px] font-black text-slate-500 uppercase block mb-1.5">State</label><input value={arenaForm.state} onChange={e => setArenaForm({ ...arenaForm, state: e.target.value })} placeholder="Odisha" className={inputCls} /></div>
+              <div className="md:col-span-2"><label className="text-[8px] font-black text-slate-500 uppercase block mb-1.5">Full Address *</label><textarea value={arenaForm.address} onChange={e => setArenaForm({ ...arenaForm, address: e.target.value })} className={`${inputCls} h-16 resize-none`} /></div>
+              <div className="md:col-span-2"><label className="text-[8px] font-black text-slate-500 uppercase block mb-1.5">Description</label><textarea value={arenaForm.description} onChange={e => setArenaForm({ ...arenaForm, description: e.target.value })} placeholder="Brief description..." className={`${inputCls} h-14 resize-none`} /></div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-black text-base">{selectedArena.name}</p>
-                  <p className="text-[9px] text-slate-500">{courts.length} courts</p>
+          </div>
+          <div className="bg-[#0b0f1a] border border-white/[0.06] rounded-2xl p-5 space-y-3">
+            <p className="text-[9px] font-black text-slate-500 uppercase">Amenities</p>
+            <div className="flex flex-wrap gap-2">{AMENITIES_LIST_SA.map(a => (<button key={a.id} type="button" onClick={() => setArenaForm(prev => ({ ...prev, amenities: prev.amenities.includes(a.id) ? prev.amenities.filter(x => x !== a.id) : [...prev.amenities, a.id] }))} className={`px-4 py-2 rounded-xl border text-[10px] font-bold transition-all ${arenaForm.amenities.includes(a.id) ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-transparent text-slate-500'}`}>{a.label}</button>))}</div>
+          </div>
+          <div className="bg-[#0b0f1a] border border-white/[0.06] rounded-2xl p-5 space-y-4">
+            <p className="text-[9px] font-black text-slate-500 uppercase">Sports & Courts</p>
+            <div className="flex flex-wrap gap-2">{SPORTS_LIST.map(s => (<button key={s} type="button" onClick={() => toggleArenaFormSport(s)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black border transition-all ${arenaForm.sports[s] ? 'bg-blue-500 text-white border-blue-400' : 'bg-white/5 text-slate-500 border-white/10'}`}>+ {s}</button>))}</div>
+            {Object.entries(arenaForm.sports).map(([sport, cts]) => (
+              <div key={sport} className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-blue-400 uppercase">{sport}</span>
+                  <button onClick={() => addArenaFormCourt(sport)} className="text-[9px] font-black bg-blue-500/10 text-blue-400 px-3 py-1 rounded-lg">+ Court</button>
                 </div>
-                <button onClick={() => { setShowAddCourt(true); setEditingCourt(null) }} className={`flex items-center gap-2 ${accent.btn} px-4 py-2.5 rounded-xl font-black text-[10px] uppercase`}>
-                  <Plus size={14} /> Add Court
-                </button>
-              </div>
-
-              {/* ADD COURT FORM */}
-              <AnimatePresence>
-                {showAddCourt && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                    className={`border rounded-2xl p-5 space-y-4 ${accent.addPanel}`}>
-                    <p className={`text-[9px] font-black uppercase ${accent.text}`}>New Court</p>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Sport</label>
-                        <select value={newCourt.sport} onChange={e => setNewCourt({ ...newCourt, sport: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-[10px] font-bold text-white outline-none">
-                          {SPORTS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Court Name</label>
-                        <input type="text" placeholder="e.g. Pitch 1" value={newCourt.name} onChange={e => setNewCourt({ ...newCourt, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && addCourt()} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-[10px] font-bold text-white outline-none" />
-                      </div>
-                      <div>
-                        <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">₹/hr</label>
-                        <input type="number" value={newCourt.price} onChange={e => setNewCourt({ ...newCourt, price: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-[10px] font-bold text-white outline-none" />
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <button onClick={addCourt} disabled={saving} className={`flex-1 ${accent.btn} py-2.5 rounded-xl font-black uppercase text-[10px] disabled:opacity-50 flex items-center justify-center gap-2`}>
-                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add Court
-                      </button>
-                      <button onClick={() => setShowAddCourt(false)} className="px-5 py-2.5 text-slate-500 font-black text-[10px]">Cancel</button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* COURTS LIST */}
-              {courts.length === 0 ? (
-                <div className="text-center py-12 opacity-40 border border-dashed border-white/10 rounded-2xl">
-                  <p className="text-[10px] font-black uppercase">No courts yet — add one above</p>
-                </div>
-              ) : courts.map(court => (
-                <div key={court.id} className="bg-[#0b0f1a] border border-white/[0.06] rounded-xl p-4 transition-all hover:border-white/20">
-                  {editingCourt?.id === court.id ? (
-                    <div className="space-y-3">
-                      <p className="text-[9px] font-black text-slate-400 uppercase">Editing: {court.name}</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Name</label>
-                          <input value={editingCourt.name} onChange={e => setEditingCourt({ ...editingCourt, name: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold text-white outline-none focus:border-emerald-500/50" />
-                        </div>
-                        <div>
-                          <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">₹/hr</label>
-                          <input type="number" value={editingCourt.price} onChange={e => setEditingCourt({ ...editingCourt, price: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-[10px] font-bold text-white outline-none focus:border-emerald-500/50" />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={saveCourtEdit} disabled={saving} className={`flex-1 ${accent.btn} py-2 rounded-lg font-black text-[9px] uppercase disabled:opacity-50 flex items-center justify-center gap-1`}>
-                          {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Save Changes
-                        </button>
-                        <button onClick={() => setEditingCourt(null)} className="px-4 py-2 text-slate-500 font-black text-[9px]">Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
+                {cts.map((court, cIdx) => (
+                  <div key={cIdx} className="bg-white/5 rounded-xl p-4 border border-white/5 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] font-black">{court.name}</p>
-                        <p className="text-[9px] text-slate-500 mt-0.5">{court.sports?.emoji} {court.sports?.name} · ₹{court.price_per_hour}/hr</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => toggleCourtActive(court.id, court.is_active)} className={`text-[8px] font-black px-2.5 py-1 rounded-full transition-all ${court.is_active ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'}`}>
-                          {court.is_active ? 'Active' : 'Off'}
-                        </button>
-                        <button onClick={() => { setEditingCourt({ id: court.id, name: court.name, price: court.price_per_hour }); setShowAddCourt(false) }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-all">
-                          <Edit3 size={14} />
-                        </button>
-                      </div>
+                      <input value={court.name} onChange={e => updateArenaFormCourtName(sport, cIdx, e.target.value)} className="bg-transparent font-black text-xs outline-none text-white w-40" placeholder="Court name" />
+                      <button onClick={() => removeArenaFormCourt(sport, cIdx)} className="text-red-400 p-1 rounded"><Trash2 size={13} /></button>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    <div className="space-y-2">
+                      <p className="text-[8px] font-black text-slate-500 uppercase">Pricing Intervals</p>
+                      {court.pricing.map((slot, pIdx) => (
+                        <div key={pIdx} className="flex items-center gap-2 bg-black/30 p-2 rounded-lg">
+                          <input type="time" value={slot.startTime} onChange={e => updateArenaFormSlot(sport, cIdx, pIdx, 'startTime', e.target.value)} className="bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none [color-scheme:dark]" />
+                          <span className="text-slate-600 text-[10px]">→</span>
+                          <input type="time" value={slot.endTime} onChange={e => updateArenaFormSlot(sport, cIdx, pIdx, 'endTime', e.target.value)} className="bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none [color-scheme:dark]" />
+                          <span className="text-slate-500 text-[10px]">₹</span>
+                          <input type="number" value={slot.price} onChange={e => updateArenaFormSlot(sport, cIdx, pIdx, 'price', parseInt(e.target.value))} className="bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none w-20" />
+                          {court.pricing.length > 1 && <button onClick={() => removeArenaFormSlot(sport, cIdx, pIdx)} className="text-red-400 ml-auto"><Trash2 size={12} /></button>}
+                        </div>
+                      ))}
+                      <button onClick={() => addArenaFormSlot(sport, cIdx)} className="w-full py-1.5 border border-dashed border-white/10 rounded-lg text-[9px] font-bold text-slate-500 hover:bg-white/5">+ Add Time Slot</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={handleSaveArena} disabled={savingArena} className={`flex-1 ${ac.btn} py-4 rounded-2xl font-black uppercase text-xs disabled:opacity-50 flex items-center justify-center gap-2`}>
+              {savingArena ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : <><CheckCircle2 size={16} /> Create Arena (Go Live Immediately)</>}
+            </button>
+            <button onClick={() => setView('list')} className="px-8 py-4 text-slate-500 font-black text-xs uppercase">Cancel</button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {view === 'courts' && selectedArena && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div><p className="font-black text-xl">{selectedArena.name}</p><p className="text-[9px] text-slate-500 mt-0.5">{courts.length} courts · expand to manage pricing</p></div>
+            <button onClick={() => { setShowAddCourt(!showAddCourt); setExpandedCourt(null) }} className={`flex items-center gap-2 ${ac.btn} px-4 py-2.5 rounded-xl font-black text-[10px] uppercase`}><Plus size={14} /> Add Court</button>
+          </div>
+          <AnimatePresence>
+            {showAddCourt && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className={`border rounded-2xl p-5 space-y-4 overflow-hidden ${ac.panel}`}>
+                <p className={`text-[9px] font-black uppercase ${ac.text}`}>New Court</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Sport</label><select value={newCourt.sport} onChange={e => setNewCourt({ ...newCourt, sport: e.target.value })} className={inputCls}>{SPORTS_LIST.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                  <div><label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Court Name</label><input value={newCourt.name} onChange={e => setNewCourt({ ...newCourt, name: e.target.value })} placeholder="e.g. Pitch 1" className={inputCls} /></div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[8px] font-black text-slate-500 uppercase">Pricing Intervals</p>
+                  {newCourt.pricing.map((slot, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-black/30 p-2 rounded-lg">
+                      <input type="time" value={slot.startTime} onChange={e => { const p = [...newCourt.pricing]; p[idx] = { ...p[idx], startTime: e.target.value }; setNewCourt({ ...newCourt, pricing: p }) }} className="bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none [color-scheme:dark]" />
+                      <span className="text-slate-600 text-[10px]">→</span>
+                      <input type="time" value={slot.endTime} onChange={e => { const p = [...newCourt.pricing]; p[idx] = { ...p[idx], endTime: e.target.value }; setNewCourt({ ...newCourt, pricing: p }) }} className="bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none [color-scheme:dark]" />
+                      <span className="text-slate-500 text-[10px]">₹</span>
+                      <input type="number" value={slot.price} onChange={e => { const p = [...newCourt.pricing]; p[idx] = { ...p[idx], price: parseInt(e.target.value) }; setNewCourt({ ...newCourt, pricing: p }) }} className="bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none w-20" />
+                      {newCourt.pricing.length > 1 && <button onClick={() => setNewCourt({ ...newCourt, pricing: newCourt.pricing.filter((_, i) => i !== idx) })} className="text-red-400 ml-auto"><Trash2 size={12} /></button>}
+                    </div>
+                  ))}
+                  <button onClick={() => setNewCourt({ ...newCourt, pricing: [...newCourt.pricing, { startTime: '06:00', endTime: '22:00', price: 500 }] })} className="w-full py-1.5 border border-dashed border-white/10 rounded-lg text-[9px] font-bold text-slate-500 hover:bg-white/5">+ Add Time Slot</button>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={addCourt} disabled={saving} className={`flex-1 ${ac.btn} py-3 rounded-xl font-black uppercase text-[10px] disabled:opacity-50 flex items-center justify-center gap-2`}>{saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add Court</button>
+                  <button onClick={() => setShowAddCourt(false)} className="px-5 text-slate-500 font-black text-[10px]">Cancel</button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {courts.length === 0
+            ? <div className="text-center py-16 opacity-40 border border-dashed border-white/10 rounded-2xl"><p className="font-black uppercase text-[10px]">No courts yet</p></div>
+            : courts.map(court => (
+              <div key={court.id} className="bg-[#0b0f1a] border border-white/[0.06] rounded-2xl overflow-hidden">
+                <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3 flex-1">
+                    {editingCourtName[court.id] !== undefined ? (
+                      <div className="flex items-center gap-2">
+                        <input value={editingCourtName[court.id]} onChange={e => setEditingCourtName(prev => ({ ...prev, [court.id]: e.target.value }))} className="bg-black/40 border border-white/20 rounded-lg px-3 py-1.5 text-[10px] font-black text-white outline-none" />
+                        <button onClick={() => saveCourtName(court.id)} className="text-[8px] bg-emerald-500 text-black px-3 py-1.5 rounded-lg font-black">Save</button>
+                        <button onClick={() => setEditingCourtName(prev => { const n = { ...prev }; delete n[court.id]; return n })} className="text-[8px] text-slate-500 font-black">×</button>
+                      </div>
+                    ) : (
+                      <div><p className="font-black text-sm">{court.name}</p><p className="text-[9px] text-slate-500">{court.sports?.emoji} {court.sports?.name} · {(pricingRules[court.id] || []).length} pricing rules</p></div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => toggleCourtActive(court.id, court.is_active)} className={`text-[8px] font-black px-2.5 py-1 rounded-full transition-all ${court.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{court.is_active ? 'Active' : 'Off'}</button>
+                    <button onClick={() => setEditingCourtName(prev => ({ ...prev, [court.id]: court.name }))} className="p-2 bg-white/5 rounded-lg text-slate-400 hover:text-white"><Edit3 size={13} /></button>
+                    <button onClick={() => setExpandedCourt(expandedCourt === court.id ? null : court.id)} className={`p-2 rounded-lg text-[10px] font-black ${expandedCourt === court.id ? `${ac.text} bg-white/10` : 'text-slate-400 bg-white/5'}`}>{expandedCourt === court.id ? '▲' : '▼'}</button>
+                    <button onClick={() => deleteCourt(court.id)} className="p-2 bg-red-500/10 rounded-lg text-red-400 hover:bg-red-500/20"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+                <AnimatePresence>
+                  {expandedCourt === court.id && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-t border-white/5 p-4 space-y-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pricing Intervals</p>
+                        <button onClick={() => addPricingRule(court.id)} className={`flex items-center gap-1 text-[9px] font-black px-3 py-1.5 rounded-lg ${ac.text} bg-white/5 hover:bg-white/10`}><Plus size={11} /> Add Interval</button>
+                      </div>
+                      {(pricingRules[court.id] || []).length === 0
+                        ? <p className="text-[9px] text-slate-600 text-center py-4">No pricing rules yet</p>
+                        : (pricingRules[court.id] || []).map(rule => (
+                          <div key={rule.id} className="flex items-center gap-2 bg-black/30 p-3 rounded-xl">
+                            <div className="flex items-center gap-2 flex-1 flex-wrap">
+                              <input type="time" value={rule.start_time?.slice(0,5) || '06:00'} onChange={e => updatePricingRule(court.id, rule.id, 'start_time', e.target.value)} onBlur={() => savePricingRule(rule)} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none [color-scheme:dark]" />
+                              <span className="text-slate-500 text-[10px]">→</span>
+                              <input type="time" value={rule.end_time?.slice(0,5) || '22:00'} onChange={e => updatePricingRule(court.id, rule.id, 'end_time', e.target.value)} onBlur={() => savePricingRule(rule)} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none [color-scheme:dark]" />
+                              <span className="text-slate-500 text-[10px]">₹</span>
+                              <input type="number" value={rule.price_per_hour} onChange={e => updatePricingRule(court.id, rule.id, 'price_per_hour', parseInt(e.target.value))} onBlur={() => savePricingRule(rule)} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[10px] text-white outline-none w-24" />
+                              <span className="text-slate-600 text-[9px]">/hr</span>
+                              <select value={rule.day_type || 'all'} onChange={e => { updatePricingRule(court.id, rule.id, 'day_type', e.target.value); setTimeout(() => savePricingRule({ ...rule, day_type: e.target.value }), 100) }} className="bg-black/40 border border-white/10 rounded-lg px-2 py-2 text-[9px] text-white outline-none">
+                                <option value="all">All Days</option><option value="weekday">Weekdays</option><option value="weekend">Weekends</option>
+                              </select>
+                            </div>
+                            <button onClick={() => deletePricingRule(court.id, rule.id)} className="text-red-400 p-1.5 hover:bg-red-500/10 rounded-lg shrink-0"><Trash2 size={13} /></button>
+                          </div>
+                        ))}
+                      <p className="text-[8px] text-slate-600 font-bold">💡 Changes auto-save on blur.</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   )
 }
