@@ -32,9 +32,9 @@ const fetchArenaFromDB = async (id) => {
       ),
       courts (
         id, name, price_per_hour, is_active,
-        sports (id, name, emoji)
-      ),
-      pricing_rules (start_time, end_time, price_per_hour, sport_id)
+        sports (id, name, emoji),
+        pricing_rules (id, start_time, end_time, price_per_hour, day_type)
+      )
     `)
     .eq('id', id)
     .single()
@@ -61,7 +61,8 @@ const fetchArenaFromDB = async (id) => {
       name: court.name,
       physicalID: court.id,
       pricePerHour: court.price_per_hour,
-      sport: court.sports
+      sport: court.sports,
+      pricingRules: court.pricing_rules || []
     })
   })
 
@@ -87,7 +88,7 @@ const fetchArenaFromDB = async (id) => {
     sports,
     sportsManaged,
     pricePerHour: minPrice,
-    pricingRules: data.pricing_rules || []
+    pricingRules: [] // pricing rules now live on each court in sportsManaged
   }
 }
 
@@ -188,19 +189,33 @@ function PlayAreaDetail() {
     }
   }, [selectedSport, area])
 
-  // ── UPDATE PRICE WHEN TIME CHANGES (peak pricing) ──
+  // ── UPDATE PRICE WHEN TIME CHANGES (pricing rules per court) ──
   useEffect(() => {
-    if (!startTime || !area) return
+    if (!area || !selectedSport) return
+    const court = area.sportsManaged[selectedSport]?.find(c => c.physicalID === selectedCourtID)
+    if (!court) return
+
+    if (!startTime) {
+      setCurrentPrice(court.pricePerHour)
+      return
+    }
+
     const hour = slotToHour(startTime)
+    // Build HH:MM:00 to match Supabase time format
     const timeStr = `${String(hour).padStart(2, '0')}:00:00`
-    const matchingRule = area.pricingRules?.find(r =>
-      timeStr >= r.start_time && timeStr < r.end_time
-    )
+
+    // Match against this court's pricing rules
+    const rules = court.pricingRules || []
+    const matchingRule = rules.find(r => {
+      const start = r.start_time?.slice(0, 8) || '00:00:00'
+      const end = r.end_time?.slice(0, 8) || '23:59:59'
+      return timeStr >= start && timeStr < end
+    })
+
     if (matchingRule) {
       setCurrentPrice(matchingRule.price_per_hour)
     } else {
-      const court = area.sportsManaged[selectedSport]?.find(c => c.physicalID === selectedCourtID)
-      if (court) setCurrentPrice(court.pricePerHour)
+      setCurrentPrice(court.pricePerHour)
     }
   }, [startTime, selectedCourtID, area, selectedSport])
 

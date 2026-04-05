@@ -386,22 +386,31 @@ function ArenaControlPanel({ accentColor = 'emerald' }) {
   }
 
   const loadCourts = async (arenaId) => {
-    const { data } = await supabase
+    setPricingRules({}) // reset when switching arenas
+    const { data, error: courtsErr } = await supabase
       .from('courts')
       .select('id, name, price_per_hour, is_active, sports(id, name, emoji)')
       .eq('arena_id', arenaId)
       .order('name')
+    if (courtsErr) { console.error('loadCourts:', courtsErr.message); return }
     if (data) {
       setCourts(data)
-      // Load pricing rules for all courts
       const ids = data.map(c => c.id)
+      const map = {}
+      ids.forEach(id => { map[id] = [] })
       if (ids.length > 0) {
-        const { data: rules } = await supabase.from('pricing_rules').select('*').in('court_id', ids).order('start_time')
-        const map = {}
-        ids.forEach(id => { map[id] = [] })
-        rules?.forEach(r => { map[r.court_id] = [...(map[r.court_id] || []), r] })
-        setPricingRules(map)
+        const { data: rules, error: rulesErr } = await supabase
+          .from('pricing_rules')
+          .select('id, court_id, start_time, end_time, price_per_hour, day_type')
+          .in('court_id', ids)
+          .order('start_time')
+        if (rulesErr) {
+          console.error('pricing_rules error:', rulesErr.message)
+        } else {
+          rules?.forEach(r => { map[r.court_id] = [...(map[r.court_id] || []), r] })
+        }
       }
+      setPricingRules(map)
     }
   }
 
