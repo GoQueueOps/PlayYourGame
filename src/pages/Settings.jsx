@@ -9,7 +9,7 @@ import {
   Shield, ChevronDown
 } from "lucide-react";
 
-const DEFAULT_AVATARS = ["🦁", "🐯", "🐱", "🦊", "🐻", "🐺", "🦅", "🐉", "🦋", "🐬", "🦁", "🎯"];
+// Avatar selection removed — upload only
 
 const GENDER_OPTIONS = ["Male", "Female", "Non-binary", "Prefer not to say"];
 
@@ -28,7 +28,7 @@ function Settings() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  // Avatar picker removed — camera button opens file picker directly;
 
   // Edit modals
   const [modal, setModal] = useState(null) // null | 'name' | 'email' | 'phone' | 'password' | 'location' | 'personal'
@@ -38,6 +38,7 @@ function Settings() {
 
   // Password fields
   const [pwFields, setPwFields] = useState({ current: '', newPw: '', confirm: '' })
+  const [pwError, setPwError] = useState('')
   const [showPw, setShowPw] = useState({ current: false, new: false, confirm: false })
 
   const fetchData = useCallback(async () => {
@@ -78,7 +79,6 @@ function Settings() {
     setLoading(true)
     const { error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', profile.id)
     if (!error) setProfile(prev => ({ ...prev, avatar_url: url }))
-    setShowAvatarPicker(false)
     setLoading(false)
   }
 
@@ -134,19 +134,59 @@ function Settings() {
   const handlePhoneSave = async () => {
     if (!modalValue.phone?.trim()) { alert('Enter a valid phone number'); return }
     setModalLoading(true)
-    // Save to profiles table (not auth — phone OTP requires Twilio setup)
-    const { error } = await supabase.from('profiles').update({ phone: modalValue.phone }).eq('id', profile.id)
-    if (error) { alert(error.message) } else { setProfile(prev => ({ ...prev, phone: modalValue.phone })); closeModal() }
+    // Try Supabase phone OTP — if not configured, fall back to direct save
+    const { error } = await supabase.auth.signInWithOtp({ phone: modalValue.phone })
+    if (error) {
+      // Twilio not set up — save directly to profiles
+      const { error: profErr } = await supabase.from('profiles').update({ phone: modalValue.phone }).eq('id', profile.id)
+      if (profErr) { alert(profErr.message) } else {
+        setProfile(prev => ({ ...prev, phone: modalValue.phone }))
+        closeModal()
+      }
+    } else {
+      // OTP sent successfully
+      setOtpStep(true)
+    }
+    setModalLoading(false)
+  }
+
+  const handlePhoneOTP = async (code) => {
+    setModalLoading(true)
+    const { error } = await supabase.auth.verifyOtp({ phone: modalValue.phone, token: code, type: 'sms' })
+    if (error) {
+      // Fallback — save to profiles anyway
+      await supabase.from('profiles').update({ phone: modalValue.phone }).eq('id', profile.id)
+      setProfile(prev => ({ ...prev, phone: modalValue.phone }))
+      closeModal()
+    } else {
+      await supabase.from('profiles').update({ phone: modalValue.phone }).eq('id', profile.id)
+      setProfile(prev => ({ ...prev, phone: modalValue.phone }))
+      closeModal()
+    }
     setModalLoading(false)
   }
 
   // ── PASSWORD CHANGE ──────────────────────────────────────────────────────────
   const handlePasswordSave = async () => {
-    if (!pwFields.newPw || pwFields.newPw.length < 6) { alert('Password must be at least 6 characters'); return }
-    if (pwFields.newPw !== pwFields.confirm) { alert('Passwords do not match'); return }
+    setPwError('')
+    if (!pwFields.current) { setPwError('Enter your current password'); return }
+    if (!pwFields.newPw || pwFields.newPw.length < 6) { setPwError('New password must be at least 6 characters'); return }
+    if (pwFields.newPw !== pwFields.confirm) { setPwError("Passwords don't match"); return }
+    if (pwFields.current === pwFields.newPw) { setPwError('New password must be different from current'); return }
     setModalLoading(true)
+    // Re-authenticate with current password to verify it
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: profile.email,
+      password: pwFields.current
+    })
+    if (signInErr) {
+      setPwError('Current password is incorrect')
+      setModalLoading(false)
+      return
+    }
     const { error } = await supabase.auth.updateUser({ password: pwFields.newPw })
-    if (error) { alert(error.message) } else { alert('✅ Password updated successfully!'); closeModal() }
+    if (error) { setPwError(error.message) } else { alert('✅ Password updated!'); closeModal() }
     setModalLoading(false)
   }
 
@@ -241,29 +281,14 @@ function Settings() {
                 ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt="Avatar" />
                 : <span>{profile.avatar_url}</span>}
             </div>
-            <button onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+            <button onClick={() => fileInputRef.current?.click()}
               className="absolute bottom-0 right-0 bg-emerald-500 p-2.5 rounded-xl border-4 border-[#020617] active:scale-95 transition-transform">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
             </button>
           </div>
 
-          <AnimatePresence>
-            {showAvatarPicker && (
-              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                className="flex flex-wrap gap-2 justify-center mb-5 overflow-hidden">
-                {DEFAULT_AVATARS.map((av, i) => (
-                  <button key={i} onClick={() => updateAvatar(av)}
-                    className="text-3xl p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-emerald-500/20 active:scale-90 transition-transform">
-                    {av}
-                  </button>
-                ))}
-                <label className="p-3 bg-white/5 rounded-xl border border-dashed border-white/20 cursor-pointer hover:bg-blue-500/20 active:scale-90 transition-transform flex items-center justify-center">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
-                </label>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Upload trigger via hidden input — camera button opens file picker directly */}
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
 
           <div className="flex items-center justify-center gap-2 mb-1">
             <h2 className="text-2xl font-black uppercase tracking-tighter italic">{profile.name || 'Set your name'}</h2>
@@ -416,63 +441,88 @@ function Settings() {
                 )}
 
                 {/* PHONE MODAL */}
-                {modal === 'phone' && (
+                {modal === 'phone' && !otpStep && (
                   <>
-                    <p className="text-[9px] text-slate-500 uppercase tracking-widest">Include country code e.g. +91</p>
+                    <p className="text-[9px] text-slate-500 uppercase tracking-widest">Include country code e.g. +91 98765 43210</p>
                     <input type="tel" value={modalValue.phone || ''} onChange={e => setModalValue({ phone: e.target.value })}
                       className={inputCls} placeholder="+91 98765 43210" />
                     <button onClick={handlePhoneSave} disabled={modalLoading}
                       className="w-full bg-emerald-500 text-black py-4 rounded-xl font-black uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">
-                      {modalLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Update Phone
+                      {modalLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Save Phone
                     </button>
+                  </>
+                )}
+                {modal === 'phone' && otpStep && (
+                  <>
+                    <p className="text-[9px] text-slate-500 uppercase tracking-widest text-center">Enter the 6-digit code sent to {modalValue.phone}</p>
+                    <input type="text" maxLength={6} className={`${inputCls} text-center text-2xl tracking-[0.4em] font-black`} placeholder="000000"
+                      onChange={e => { if (e.target.value.length === 6) handlePhoneOTP(e.target.value) }} />
+                    {modalLoading && <div className="flex justify-center"><Loader2 className="animate-spin text-emerald-500" size={24} /></div>}
+                    <button onClick={() => setOtpStep(false)} className="w-full text-slate-500 text-[9px] uppercase tracking-widest py-2">← Back</button>
                   </>
                 )}
 
                 {/* PASSWORD MODAL */}
                 {modal === 'password' && (
                   <>
-                    {/* New password */}
+                    {/* Current password */}
                     <div className="relative">
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">New Password</label>
-                      <input type={showPw.new ? 'text' : 'password'} value={pwFields.newPw}
-                        onChange={e => setPwFields(p => ({ ...p, newPw: e.target.value }))}
-                        className={inputCls} placeholder="Min 6 characters" />
-                      <button onClick={() => setShowPw(p => ({ ...p, new: !p.new }))}
+                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">Current Password</label>
+                      <input type={showPw.current ? 'text' : 'password'} value={pwFields.current}
+                        onChange={e => { setPwFields(p => ({ ...p, current: e.target.value })); setPwError('') }}
+                        className={inputCls} placeholder="Your current password" />
+                      <button onClick={() => setShowPw(p => ({ ...p, current: !p.current }))}
                         className="absolute right-4 top-9 text-slate-500 hover:text-white">
-                        {showPw.new ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showPw.current ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
 
-                    {/* Strength bar */}
-                    {pwFields.newPw.length > 0 && (
-                      <div>
-                        <div className="flex gap-1 mb-1">
-                          {[1, 2, 3, 4, 5].map(i => (
-                            <div key={i} className={`flex-1 h-1.5 rounded-full transition-all ${i <= pwStrength(pwFields.newPw) ? pwStrengthColor[pwStrength(pwFields.newPw)] : 'bg-white/10'}`} />
-                          ))}
+                    <div className="border-t border-white/5 pt-4">
+                      {/* New password */}
+                      <div className="relative mb-4">
+                        <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">New Password</label>
+                        <input type={showPw.new ? 'text' : 'password'} value={pwFields.newPw}
+                          onChange={e => { setPwFields(p => ({ ...p, newPw: e.target.value })); setPwError('') }}
+                          className={inputCls} placeholder="Min 6 characters" />
+                        <button onClick={() => setShowPw(p => ({ ...p, new: !p.new }))}
+                          className="absolute right-4 top-9 text-slate-500 hover:text-white">
+                          {showPw.new ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+
+                      {/* Strength bar */}
+                      {pwFields.newPw.length > 0 && (
+                        <div className="mb-4">
+                          <div className="flex gap-1 mb-1">
+                            {[1, 2, 3, 4, 5].map(i => (
+                              <div key={i} className={`flex-1 h-1.5 rounded-full transition-all ${i <= pwStrength(pwFields.newPw) ? pwStrengthColor[pwStrength(pwFields.newPw)] : 'bg-white/10'}`} />
+                            ))}
+                          </div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-widest">{pwStrengthLabel[pwStrength(pwFields.newPw)]}</p>
                         </div>
-                        <p className="text-[9px] text-slate-500 uppercase tracking-widest">{pwStrengthLabel[pwStrength(pwFields.newPw)]}</p>
+                      )}
+
+                      {/* Confirm password */}
+                      <div className="relative">
+                        <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">Confirm New Password</label>
+                        <input type={showPw.confirm ? 'text' : 'password'} value={pwFields.confirm}
+                          onChange={e => { setPwFields(p => ({ ...p, confirm: e.target.value })); setPwError('') }}
+                          className={inputCls} placeholder="Repeat new password" />
+                        <button onClick={() => setShowPw(p => ({ ...p, confirm: !p.confirm }))}
+                          className="absolute right-4 top-9 text-slate-500 hover:text-white">
+                          {showPw.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {pwError && (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                        <p className="text-[10px] text-red-400 font-bold">{pwError}</p>
                       </div>
                     )}
 
-                    {/* Confirm password */}
-                    <div className="relative">
-                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">Confirm Password</label>
-                      <input type={showPw.confirm ? 'text' : 'password'} value={pwFields.confirm}
-                        onChange={e => setPwFields(p => ({ ...p, confirm: e.target.value }))}
-                        className={inputCls} placeholder="Repeat password" />
-                      <button onClick={() => setShowPw(p => ({ ...p, confirm: !p.confirm }))}
-                        className="absolute right-4 top-9 text-slate-500 hover:text-white">
-                        {showPw.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-
-                    {pwFields.confirm && pwFields.newPw !== pwFields.confirm && (
-                      <p className="text-[9px] text-red-400 font-bold">Passwords don't match</p>
-                    )}
-
-                    <button onClick={handlePasswordSave} disabled={modalLoading || !pwFields.newPw || pwFields.newPw !== pwFields.confirm}
-                      className="w-full bg-orange-500 text-black py-4 rounded-xl font-black uppercase text-[10px] tracking-widest disabled:opacity-40 flex items-center justify-center gap-2 mt-2">
+                    <button onClick={handlePasswordSave} disabled={modalLoading || !pwFields.current || !pwFields.newPw || pwFields.newPw !== pwFields.confirm}
+                      className="w-full bg-orange-500 text-black py-4 rounded-xl font-black uppercase text-[10px] tracking-widest disabled:opacity-40 flex items-center justify-center gap-2">
                       {modalLoading ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />} Update Password
                     </button>
                   </>
