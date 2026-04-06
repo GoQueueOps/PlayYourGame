@@ -175,7 +175,6 @@ function Settings() {
     if (pwFields.current === pwFields.newPw) { setPwError('New password must be different from current'); return }
     setModalLoading(true)
     // Re-authenticate with current password to verify it
-    const { data: { user: authUser } } = await supabase.auth.getUser()
     const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: profile.email,
       password: pwFields.current
