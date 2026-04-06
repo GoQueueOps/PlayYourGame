@@ -134,32 +134,8 @@ function Settings() {
   const handlePhoneSave = async () => {
     if (!modalValue.phone?.trim()) { alert('Enter a valid phone number'); return }
     setModalLoading(true)
-    // Try Supabase phone OTP — if not configured, fall back to direct save
-    const { error } = await supabase.auth.signInWithOtp({ phone: modalValue.phone })
-    if (error) {
-      // Twilio not set up — save directly to profiles
-      const { error: profErr } = await supabase.from('profiles').update({ phone: modalValue.phone }).eq('id', profile.id)
-      if (profErr) { alert(profErr.message) } else {
-        setProfile(prev => ({ ...prev, phone: modalValue.phone }))
-        closeModal()
-      }
-    } else {
-      // OTP sent successfully
-      setOtpStep(true)
-    }
-    setModalLoading(false)
-  }
-
-  const handlePhoneOTP = async (code) => {
-    setModalLoading(true)
-    const { error } = await supabase.auth.verifyOtp({ phone: modalValue.phone, token: code, type: 'sms' })
-    if (error) {
-      // Fallback — save to profiles anyway
-      await supabase.from('profiles').update({ phone: modalValue.phone }).eq('id', profile.id)
-      setProfile(prev => ({ ...prev, phone: modalValue.phone }))
-      closeModal()
-    } else {
-      await supabase.from('profiles').update({ phone: modalValue.phone }).eq('id', profile.id)
+    const { error } = await supabase.from('profiles').update({ phone: modalValue.phone }).eq('id', profile.id)
+    if (error) { alert(error.message) } else {
       setProfile(prev => ({ ...prev, phone: modalValue.phone }))
       closeModal()
     }
@@ -440,24 +416,16 @@ function Settings() {
                 )}
 
                 {/* PHONE MODAL */}
-                {modal === 'phone' && !otpStep && (
+                {modal === 'phone' && (
                   <>
                     <p className="text-[9px] text-slate-500 uppercase tracking-widest">Include country code e.g. +91 98765 43210</p>
                     <input type="tel" value={modalValue.phone || ''} onChange={e => setModalValue({ phone: e.target.value })}
+                      onKeyDown={e => e.key === 'Enter' && handlePhoneSave()}
                       className={inputCls} placeholder="+91 98765 43210" />
                     <button onClick={handlePhoneSave} disabled={modalLoading}
                       className="w-full bg-emerald-500 text-black py-4 rounded-xl font-black uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">
                       {modalLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Save Phone
                     </button>
-                  </>
-                )}
-                {modal === 'phone' && otpStep && (
-                  <>
-                    <p className="text-[9px] text-slate-500 uppercase tracking-widest text-center">Enter the 6-digit code sent to {modalValue.phone}</p>
-                    <input type="text" maxLength={6} className={`${inputCls} text-center text-2xl tracking-[0.4em] font-black`} placeholder="000000"
-                      onChange={e => { if (e.target.value.length === 6) handlePhoneOTP(e.target.value) }} />
-                    {modalLoading && <div className="flex justify-center"><Loader2 className="animate-spin text-emerald-500" size={24} /></div>}
-                    <button onClick={() => setOtpStep(false)} className="w-full text-slate-500 text-[9px] uppercase tracking-widest py-2">← Back</button>
                   </>
                 )}
 
