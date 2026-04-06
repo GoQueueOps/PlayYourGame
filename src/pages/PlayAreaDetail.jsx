@@ -175,7 +175,7 @@ function PlayAreaDetail() {
         const startIdx = TIME_SLOTS.indexOf(booking.start_time)
         const endIdx = TIME_SLOTS.indexOf(booking.end_time)
         if (startIdx !== -1 && endIdx !== -1) {
-          for (let i = startIdx; i <= endIdx; i++) {
+          for (let i = startIdx; i < endIdx; i++) { // end slot excluded — it's the start of next booking
             booked.push(TIME_SLOTS[i])
           }
         }
@@ -307,10 +307,10 @@ function PlayAreaDetail() {
       return
     }
 
-    // Check if any slot in range is booked
+    // Check if any slot in range is booked (exclude end slot — it can be another booking's start)
     const hasBookedInRange = bookedSlots.some(bs => {
       const bIdx = TIME_SLOTS.indexOf(bs)
-      return bIdx > sIdx && bIdx <= cIdx
+      return bIdx > sIdx && bIdx < cIdx
     })
 
     if (hasBookedInRange) {
@@ -575,7 +575,7 @@ function PlayAreaDetail() {
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
             {TIME_SLOTS.map((t) => {
               const currentIdx = TIME_SLOTS.indexOf(t)
-              const isInRange = startTime && currentIdx >= startIdx && currentIdx <= endIdx
+              const isInRange = startTime && currentIdx >= startIdx && currentIdx < endIdx // end slot not highlighted
               const isStart = t === startTime
               const isEnd = t === endTime
               const isEdge = isStart || isEnd
